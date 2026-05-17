@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import DashboardPageShell from "../components/DashboardPageShell";
 import FavoriteIcon from "../components/FavoriteIcon";
 import SintaBadge from "../components/SintaBadge";
 import { supabase } from "@/lib/supabase";
@@ -219,6 +218,7 @@ export default function JurnalPage() {
 
   async function toggleFavorite(journalId) {
     if (!userId) {
+      toast.info("Login untuk menyimpan jurnal favorit.");
       router.push("/login");
       return;
     }
@@ -278,20 +278,23 @@ export default function JurnalPage() {
   }
 
   return (
-    <DashboardPageShell title="Cari Jurnal" allowedRoles={["admin", "dosen", "mahasiswa"]}>
-      <h1 className="mb-3 text-4xl font-bold">
-        Cari Jurnal SINTA
-      </h1>
+    <main className="min-h-screen bg-slate-100 text-slate-950 transition-colors dark:bg-slate-950 dark:text-white">
+      <PublicJournalHeader />
 
-      <p className="mb-8 text-slate-600 dark:text-gray-300">
-        Cari informasi jurnal berdasarkan nama, ISSN, bidang, publisher, atau peringkat SINTA.
-      </p>
+      <section className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-10">
+        <h1 className="mb-3 text-4xl font-bold">
+          Cari Jurnal SINTA
+        </h1>
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <StatCard label="Total Jurnal" value={metadataLoading ? "..." : totalJournals} />
-        <StatCard label="Hasil Filter" value={loading ? "..." : filteredCount} />
-        <StatCard label="Publisher Unik" value={metadataLoading ? "..." : publisherOptions.length} />
-      </div>
+        <p className="mb-8 text-slate-600 dark:text-gray-300">
+          Cari informasi jurnal berdasarkan nama, ISSN, bidang, publisher, atau peringkat SINTA.
+        </p>
+
+        <div className="mb-6 grid gap-4 md:grid-cols-3">
+          <StatCard label="Total Jurnal" value={metadataLoading ? "..." : totalJournals} />
+          <StatCard label="Hasil Filter" value={loading ? "..." : filteredCount} />
+          <StatCard label="Publisher Unik" value={metadataLoading ? "..." : publisherOptions.length} />
+        </div>
 
       <div className="sticky top-24 z-10 mb-8 rounded-[1.5rem] border border-slate-200/80 bg-white/85 p-5 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-white/10 dark:bg-slate-900/80 dark:shadow-black/20 md:p-6">
         <div className="grid gap-4 xl:grid-cols-6">
@@ -516,7 +519,42 @@ export default function JurnalPage() {
           </div>
         </>
       )}
-    </DashboardPageShell>
+      </section>
+    </main>
+  );
+}
+
+function PublicJournalHeader() {
+  return (
+    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80">
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-8">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 font-black text-white shadow-lg shadow-blue-600/20">
+            SA
+          </div>
+          <div>
+            <p className="font-black leading-tight tracking-tight">
+              SINTA Journal AI
+            </p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-400">
+              Public journal search
+            </p>
+          </div>
+        </Link>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
+            Pencarian jurnal dapat digunakan tanpa login
+          </span>
+          <Link
+            href="/login"
+            className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100"
+          >
+            Login
+          </Link>
+        </div>
+      </div>
+    </header>
   );
 }
 

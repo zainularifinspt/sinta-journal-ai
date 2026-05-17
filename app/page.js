@@ -84,6 +84,9 @@ export default function Home() {
           </Link>
 
           <div className="flex items-center gap-3">
+            <span className="hidden rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200 lg:inline-flex">
+              Pencarian jurnal dapat digunakan tanpa login
+            </span>
             <Link
               href="/login"
               className="rounded-2xl px-4 py-2 font-bold text-slate-700 transition hover:bg-slate-100 dark:text-gray-200 dark:hover:bg-white/10"
@@ -107,6 +110,9 @@ export default function Home() {
         <div className="relative">
           <div className="mb-6 inline-flex rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 shadow-sm dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-200">
             AI-powered Journal Finder
+          </div>
+          <div className="mb-5 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 shadow-sm dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-200 lg:hidden">
+            Pencarian jurnal dapat digunakan tanpa login
           </div>
 
           <h1 className="max-w-4xl text-5xl font-black leading-[1.02] tracking-tight md:text-7xl">

@@ -13,7 +13,6 @@ const dashboardLayoutPaths = [
   "/admin",
   "/dashboard",
   "/favorit",
-  "/jurnal",
   "/profil",
   "/rekomendasi",
   "/riwayat",
