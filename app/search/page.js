@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import SintaBadge from "../components/SintaBadge";
 import { supabase } from "@/lib/supabase";
 
@@ -58,14 +58,34 @@ function applySorting(query, sortBy) {
 }
 
 export default function SearchPage() {
+  return (
+    <Suspense fallback={<SearchPageLoading />}>
+      <SearchPageContent />
+    </Suspense>
+  );
+}
+
+function SearchPageLoading() {
+  return (
+    <main className="min-h-screen bg-slate-100 text-slate-950 transition-colors dark:bg-slate-950 dark:text-white">
+      <PublicSearchHeader />
+      <section className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-10">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10">
+          <p className="font-semibold text-slate-700 dark:text-gray-200">
+            Memuat halaman...
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function SearchPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [journals, setJournals] = useState([]);
   const [searchTerm, setSearchTerm] = useState(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-
-    return new URLSearchParams(window.location.search).get("search") ?? "";
+    return searchParams.get("search") ?? "";
   });
   const [selectedSinta, setSelectedSinta] = useState("Semua SINTA");
   const [selectedBidang, setSelectedBidang] = useState("Semua Bidang");
@@ -83,6 +103,15 @@ export default function SearchPage() {
   const totalPages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
   const fromItem = filteredCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const toItem = Math.min(currentPage * PAGE_SIZE, filteredCount);
+
+  // Sync searchTerm dengan URL parameter
+  useEffect(() => {
+    const paramSearch = searchParams.get("search") ?? "";
+    if (paramSearch !== searchTerm) {
+      setSearchTerm(paramSearch);
+      setCurrentPage(1);
+    }
+  }, [searchParams, searchTerm]);
 
   useEffect(() => {
     let isActive = true;
@@ -203,6 +232,7 @@ export default function SearchPage() {
     setSelectedPublisher("Semua Publisher");
     setSortBy("nama_asc");
     setCurrentPage(1);
+    router.replace("/search");
   }
 
   function updateFilter(setter, value) {
