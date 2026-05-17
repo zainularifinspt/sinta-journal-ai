@@ -48,6 +48,7 @@ export default function AdminJournalsPage() {
   const [journals, setJournals] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [formOpen, setFormOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -64,6 +65,7 @@ export default function AdminJournalsPage() {
   const [sintaError, setSintaError] = useState("");
   const [sintaSuccess, setSintaSuccess] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     fetchJournals();
@@ -100,11 +102,14 @@ export default function AdminJournalsPage() {
   function startCreate() {
     setEditingId(null);
     setForm(emptyForm);
+    setFormOpen(true);
     setError("");
+    setSuccess("");
   }
 
   function startEdit(journal) {
     setEditingId(journal.id);
+    setFormOpen(true);
     setForm({
       nama: journal.nama ?? "",
       sinta: journal.sinta ?? "SINTA 1",
@@ -118,6 +123,7 @@ export default function AdminJournalsPage() {
       catatan_ai: journal.catatan_ai ?? journal.catatanAI ?? "",
     });
     setError("");
+    setSuccess("");
   }
 
   async function handleSubmit(event) {
@@ -139,6 +145,7 @@ export default function AdminJournalsPage() {
     } else {
       setForm(emptyForm);
       setEditingId(null);
+      setSuccess(editingId ? "Perubahan jurnal berhasil disimpan." : "Jurnal baru berhasil ditambahkan.");
       await fetchJournals();
     }
 
@@ -161,6 +168,7 @@ export default function AdminJournalsPage() {
     if (deleteError) {
       setError(deleteError.message);
     } else {
+      setSuccess("Jurnal berhasil dihapus.");
       await fetchJournals();
     }
   }
@@ -372,54 +380,78 @@ export default function AdminJournalsPage() {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="grid gap-4">
-            {fields.map((field) => (
-              <label key={field.name} className="grid gap-2">
-                <span className="font-semibold">
-                  {field.label}
-                </span>
-                {field.type === "textarea" ? (
-                  <textarea
-                    name={field.name}
-                    value={form[field.name]}
-                    onChange={handleChange}
-                    rows={4}
-                    className="resize-none rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
-                  />
-                ) : field.type === "select" ? (
-                  <select
-                    name={field.name}
-                    value={form[field.name]}
-                    onChange={handleChange}
-                    className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
-                  >
-                    <option>SINTA 1</option>
-                    <option>SINTA 2</option>
-                    <option>SINTA 3</option>
-                    <option>SINTA 4</option>
-                    <option>SINTA 5</option>
-                    <option>SINTA 6</option>
-                  </select>
-                ) : (
-                  <input
-                    name={field.name}
-                    value={form[field.name]}
-                    onChange={handleChange}
-                    required={field.name === "nama"}
-                    className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
-                  />
-                )}
-              </label>
-            ))}
+          {success && (
+            <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+              {success}
+            </p>
+          )}
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="mt-2 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
-            >
-              {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Tambah Jurnal"}
-            </button>
-          </form>
+          {!formOpen && (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-slate-600 dark:border-white/10 dark:text-gray-300">
+              Klik tombol Tambah atau Edit untuk membuka form jurnal.
+            </div>
+          )}
+
+          {formOpen && (
+            <form onSubmit={handleSubmit} className="grid gap-4">
+              {fields.map((field) => (
+                <label key={field.name} className="grid gap-2">
+                  <span className="font-semibold">
+                    {field.label}
+                  </span>
+                  {field.type === "textarea" ? (
+                    <textarea
+                      name={field.name}
+                      value={form[field.name]}
+                      onChange={handleChange}
+                      rows={4}
+                      className="resize-none rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+                    />
+                  ) : field.type === "select" ? (
+                    <select
+                      name={field.name}
+                      value={form[field.name]}
+                      onChange={handleChange}
+                      className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+                    >
+                      <option>SINTA 1</option>
+                      <option>SINTA 2</option>
+                      <option>SINTA 3</option>
+                      <option>SINTA 4</option>
+                      <option>SINTA 5</option>
+                      <option>SINTA 6</option>
+                    </select>
+                  ) : (
+                    <input
+                      name={field.name}
+                      value={form[field.name]}
+                      onChange={handleChange}
+                      required={field.name === "nama"}
+                      className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+                    />
+                  )}
+                </label>
+              ))}
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="mt-2 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+                >
+                  {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Tambah Jurnal"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormOpen(false)}
+                  className="mt-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                >
+                  Tutup Form
+                </button>
+              </div>
+            </form>
+          )}
         </section>
 
         <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10">

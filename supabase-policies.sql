@@ -36,6 +36,14 @@ for insert
 to authenticated
 with check (auth.uid() = id);
 
+drop policy if exists "Users can update own profile" on public.profiles;
+create policy "Users can update own profile"
+on public.profiles
+for update
+to authenticated
+using (auth.uid() = id)
+with check (auth.uid() = id);
+
 drop policy if exists "Public can select journals" on public.journals;
 create policy "Public can select journals"
 on public.journals

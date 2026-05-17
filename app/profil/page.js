@@ -8,6 +8,12 @@ const SEARCH_COUNT_KEY = "journalSearchCount";
 
 export default function ProfilPage() {
   const [profile, setProfile] = useState(null);
+  const [userId, setUserId] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [stats, setStats] = useState({
     favorites: 0,
     history: 0,
@@ -24,6 +30,8 @@ export default function ProfilPage() {
       if (!userId) {
         return;
       }
+
+      setUserId(userId);
 
       const [profileResult, favoritesResult, historyResult] = await Promise.all([
         supabase
@@ -46,6 +54,7 @@ export default function ProfilPage() {
       }
 
       setProfile(profileResult.data ?? null);
+      setFullName(profileResult.data?.full_name ?? "");
       setStats({
         favorites: favoritesResult.count ?? 0,
         history: historyResult.count ?? 0,
@@ -59,6 +68,37 @@ export default function ProfilPage() {
       isActive = false;
     };
   }, []);
+
+  async function handleSaveProfile(event) {
+    event.preventDefault();
+
+    if (!userId) {
+      setError("Session pengguna tidak ditemukan.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+    setError("");
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ full_name: fullName.trim() })
+      .eq("id", userId);
+
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      setProfile((currentProfile) => ({
+        ...currentProfile,
+        full_name: fullName.trim(),
+      }));
+      setMessage("Profil berhasil diperbarui.");
+      setEditOpen(false);
+    }
+
+    setSaving(false);
+  }
 
   return (
     <DashboardPageShell title="Profil" allowedRoles={["admin", "dosen", "mahasiswa"]}>
@@ -84,10 +124,66 @@ export default function ProfilPage() {
 
             <button
               type="button"
+              onClick={() => {
+                setEditOpen((current) => !current);
+                setMessage("");
+                setError("");
+              }}
               className="mt-6 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
             >
-              Edit Profil
+              {editOpen ? "Tutup Edit" : "Edit Profil"}
             </button>
+
+            {message && (
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+                {message}
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+                {error}
+              </div>
+            )}
+
+            {editOpen && (
+              <form onSubmit={handleSaveProfile} className="mt-6 grid gap-4 rounded-2xl bg-slate-50 p-4 dark:bg-slate-950/40">
+                <label className="grid gap-2">
+                  <span className="font-semibold">Nama Lengkap</span>
+                  <input
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className="font-semibold">Email</span>
+                  <input
+                    value={profile?.email ?? ""}
+                    readOnly
+                    className="cursor-not-allowed rounded-xl bg-slate-100 p-3 text-slate-600 outline-none ring-1 ring-slate-200 dark:bg-white/10 dark:text-gray-300 dark:ring-white/10"
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className="font-semibold">Role</span>
+                  <input
+                    value={profile?.role ?? ""}
+                    readOnly
+                    className="cursor-not-allowed rounded-xl bg-slate-100 p-3 text-slate-600 outline-none ring-1 ring-slate-200 dark:bg-white/10 dark:text-gray-300 dark:ring-white/10"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="w-fit rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+                >
+                  {saving ? "Menyimpan..." : "Simpan Profil"}
+                </button>
+              </form>
+            )}
           </div>
 
           <div className="grid gap-5 md:grid-cols-3 lg:grid-cols-1">

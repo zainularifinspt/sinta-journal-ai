@@ -1,8 +1,8 @@
-import DashboardLayout from "@/app/components/DashboardLayout";
+import DashboardPageShell from "@/app/components/DashboardPageShell";
 
 export default function AdminUsersPage() {
   return (
-    <DashboardLayout role="Admin" title="Kelola User">
+    <DashboardPageShell title="Kelola User" allowedRoles={["admin"]}>
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10 md:p-8">
         <h2 className="text-2xl font-bold">
           Kelola User
@@ -11,6 +11,6 @@ export default function AdminUsersPage() {
           Placeholder pengelolaan user. Modul ini siap dihubungkan ke autentikasi dan tabel user saat skema sudah ditentukan.
         </p>
       </section>
-    </DashboardLayout>
+    </DashboardPageShell>
   );
 }

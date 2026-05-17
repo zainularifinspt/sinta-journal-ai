@@ -63,7 +63,13 @@ function applySorting(query, sortBy) {
 export default function JurnalPage() {
   const router = useRouter();
   const [journals, setJournals] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+
+    return new URLSearchParams(window.location.search).get("search") ?? "";
+  });
   const [selectedSinta, setSelectedSinta] = useState("Semua SINTA");
   const [selectedBidang, setSelectedBidang] = useState("Semua Bidang");
   const [selectedPublisher, setSelectedPublisher] = useState("Semua Publisher");
@@ -248,6 +254,10 @@ export default function JurnalPage() {
   function handleSearchAction() {
     const currentCount = Number(window.localStorage.getItem(SEARCH_COUNT_KEY) ?? 0);
     window.localStorage.setItem(SEARCH_COUNT_KEY, String(currentCount + 1));
+    const query = searchTerm.trim();
+
+    router.replace(query ? `/jurnal?search=${encodeURIComponent(query)}` : "/jurnal");
+    setCurrentPage(1);
   }
 
   function resetFilters() {
