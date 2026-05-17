@@ -8,12 +8,26 @@ import { supabase } from "@/lib/supabase";
 
 const PAGE_SIZE = 10;
 const sintaOptions = ["SINTA 1", "SINTA 2", "SINTA 3", "SINTA 4", "SINTA 5", "SINTA 6"];
+const monthOptions = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
 
 function sanitizeSearch(value) {
   return value.replace(/[,%]/g, " ").trim();
 }
 
-function applyFilters(query, { searchTerm, selectedSinta, selectedBidang, selectedPublisher }) {
+function applyFilters(query, { searchTerm, selectedSinta, selectedMonth }) {
   const safeSearch = sanitizeSearch(searchTerm);
 
   if (safeSearch) {
@@ -26,35 +40,11 @@ function applyFilters(query, { searchTerm, selectedSinta, selectedBidang, select
     query = query.eq("sinta", selectedSinta);
   }
 
-  if (selectedBidang !== "Semua Bidang") {
-    query = query.eq("bidang", selectedBidang);
-  }
-
-  if (selectedPublisher !== "Semua Publisher") {
-    query = query.eq("publisher", selectedPublisher);
+  if (selectedMonth !== "Semua Bulan") {
+    query = query.ilike("jadwal", `%${selectedMonth}%`);
   }
 
   return query;
-}
-
-function applySorting(query, sortBy) {
-  if (sortBy === "nama_desc") {
-    return query.order("nama", { ascending: false });
-  }
-
-  if (sortBy === "sinta_asc") {
-    return query.order("sinta", { ascending: true }).order("nama", { ascending: true });
-  }
-
-  if (sortBy === "sinta_desc") {
-    return query.order("sinta", { ascending: false }).order("nama", { ascending: true });
-  }
-
-  if (sortBy === "terbaru") {
-    return query.order("created_at", { ascending: false }).order("nama", { ascending: true });
-  }
-
-  return query.order("nama", { ascending: true });
 }
 
 export default function SearchPage() {
@@ -92,14 +82,10 @@ function SearchPageContent() {
   console.log("Search term:", searchTerm);
   
   const [selectedSinta, setSelectedSinta] = useState("Semua SINTA");
-  const [selectedBidang, setSelectedBidang] = useState("Semua Bidang");
-  const [selectedPublisher, setSelectedPublisher] = useState("Semua Publisher");
-  const [sortBy, setSortBy] = useState("nama_asc");
+  const [selectedMonth, setSelectedMonth] = useState("Semua Bulan");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalJournals, setTotalJournals] = useState(0);
   const [filteredCount, setFilteredCount] = useState(0);
-  const [bidangOptions, setBidangOptions] = useState([]);
-  const [publisherOptions, setPublisherOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [metadataLoading, setMetadataLoading] = useState(true);
   const [error, setError] = useState("");
@@ -123,13 +109,11 @@ function SearchPageContent() {
 
     async function fetchMetadata() {
       const [
-        { data: metadataData, error: metadataError, count },
+        { error: metadataError, count },
       ] = await Promise.all([
         supabase
           .from("journals")
-          .select("bidang, publisher", { count: "exact" })
-          .order("bidang", { ascending: true })
-          .limit(5000),
+          .select("id", { count: "exact", head: true }),
       ]);
 
       if (!isActive) {
@@ -140,17 +124,6 @@ function SearchPageContent() {
 
       if (metadataError) {
         setError(metadataError.message);
-        setBidangOptions([]);
-        setPublisherOptions([]);
-      } else {
-        setBidangOptions(
-          Array.from(new Set((metadataData ?? []).map((journal) => journal.bidang).filter(Boolean)))
-            .sort((first, second) => first.localeCompare(second))
-        );
-        setPublisherOptions(
-          Array.from(new Set((metadataData ?? []).map((journal) => journal.publisher).filter(Boolean)))
-            .sort((first, second) => first.localeCompare(second))
-        );
       }
 
       setMetadataLoading(false);
@@ -167,10 +140,9 @@ function SearchPageContent() {
     () => ({
       searchTerm,
       selectedSinta,
-      selectedBidang,
-      selectedPublisher,
+      selectedMonth,
     }),
-    [searchTerm, selectedSinta, selectedBidang, selectedPublisher]
+    [searchTerm, selectedSinta, selectedMonth]
   );
 
   useEffect(() => {
@@ -186,8 +158,9 @@ function SearchPageContent() {
         .from("journals")
         .select("*", { count: "exact" });
 
-      query = applyFilters(query, filterState);
-      query = applySorting(query, sortBy).range(from, to);
+      query = applyFilters(query, filterState)
+        .order("nama", { ascending: true })
+        .range(from, to);
 
       const { data, error: fetchError, count } = await query;
 
@@ -221,7 +194,7 @@ function SearchPageContent() {
     return () => {
       isActive = false;
     };
-  }, [currentPage, filterState, sortBy]);
+  }, [currentPage, filterState]);
 
   function handleSearchAction() {
     const query = searchTerm.trim();
@@ -233,9 +206,7 @@ function SearchPageContent() {
   function resetFilters() {
     setSearchTerm("");
     setSelectedSinta("Semua SINTA");
-    setSelectedBidang("Semua Bidang");
-    setSelectedPublisher("Semua Publisher");
-    setSortBy("nama_asc");
+    setSelectedMonth("Semua Bulan");
     setCurrentPage(1);
     router.replace("/search");
   }
@@ -255,87 +226,82 @@ function SearchPageContent() {
         </h1>
 
         <p className="mb-8 text-slate-600 dark:text-gray-300">
-          Cari informasi jurnal berdasarkan nama, ISSN, bidang, publisher, atau peringkat SINTA.
+          Cari informasi jurnal berdasarkan nama, ISSN, bidang, publisher, peringkat SINTA, atau waktu terbit.
         </p>
 
         <div className="mb-6 grid gap-4 md:grid-cols-3">
           <StatCard label="Total Jurnal" value={metadataLoading ? "..." : totalJournals} />
           <StatCard label="Hasil Filter" value={loading ? "..." : filteredCount} />
-          <StatCard label="Publisher Unik" value={metadataLoading ? "..." : publisherOptions.length} />
-        </div>
-
-      <div className="sticky top-24 z-10 mb-8 rounded-[1.5rem] border border-slate-200/80 bg-white/85 p-5 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-white/10 dark:bg-slate-900/80 dark:shadow-black/20 md:p-6">
-        <div className="grid gap-4 xl:grid-cols-6">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(event) => updateFilter(setSearchTerm, event.target.value)}
-            placeholder="Nama jurnal / ISSN / bidang"
-            className="rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0 xl:col-span-2"
+          <StatCard
+            label="Filter Aktif"
+            value={selectedMonth !== "Semua Bulan" ? selectedMonth : selectedSinta !== "Semua SINTA" ? selectedSinta : "Semua"}
           />
-
-          <select
-            value={selectedSinta}
-            onChange={(event) => updateFilter(setSelectedSinta, event.target.value)}
-            className="rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
-          >
-            <option>Semua SINTA</option>
-            {sintaOptions.map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
-
-          <select
-            value={selectedBidang}
-            onChange={(event) => updateFilter(setSelectedBidang, event.target.value)}
-            className="rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
-          >
-            <option>Semua Bidang</option>
-            {bidangOptions.map((bidang) => (
-              <option key={bidang}>{bidang}</option>
-            ))}
-          </select>
-
-          <select
-            value={selectedPublisher}
-            onChange={(event) => updateFilter(setSelectedPublisher, event.target.value)}
-            className="rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
-          >
-            <option>Semua Publisher</option>
-            {publisherOptions.map((publisher) => (
-              <option key={publisher}>{publisher}</option>
-            ))}
-          </select>
-
-          <select
-            value={sortBy}
-            onChange={(event) => updateFilter(setSortBy, event.target.value)}
-            className="rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
-          >
-            <option value="nama_asc">Nama A-Z</option>
-            <option value="nama_desc">Nama Z-A</option>
-            <option value="sinta_asc">SINTA tertinggi</option>
-            <option value="sinta_desc">SINTA terendah</option>
-            <option value="terbaru">Terbaru</option>
-          </select>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={handleSearchAction}
-            className="rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white transition hover:bg-blue-700"
-          >
-            Cari Jurnal
-          </button>
+      <div className="sticky top-24 z-10 mb-8 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-lg shadow-slate-200/50 backdrop-blur dark:border-white/10 dark:bg-slate-900/85 dark:shadow-black/20 md:p-5">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_170px_190px_auto] lg:items-end">
+          <label className="grid gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-gray-400">
+              Pencarian
+            </span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => updateFilter(setSearchTerm, event.target.value)}
+              placeholder="Nama jurnal / ISSN / bidang"
+              className="h-12 rounded-2xl bg-white px-4 text-black outline-none ring-1 ring-slate-200 transition focus:ring-2 focus:ring-blue-500 dark:ring-0"
+            />
+          </label>
 
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-          >
-            Reset Filter
-          </button>
+          <label className="grid gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-gray-400">
+              SINTA
+            </span>
+            <select
+              value={selectedSinta}
+              onChange={(event) => updateFilter(setSelectedSinta, event.target.value)}
+              className="h-12 rounded-2xl bg-white px-4 text-black outline-none ring-1 ring-slate-200 transition focus:ring-2 focus:ring-blue-500 dark:ring-0"
+            >
+              <option>Semua SINTA</option>
+              {sintaOptions.map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-gray-400">
+              Waktu Terbit
+            </span>
+            <select
+              value={selectedMonth}
+              onChange={(event) => updateFilter(setSelectedMonth, event.target.value)}
+              className="h-12 rounded-2xl bg-white px-4 text-black outline-none ring-1 ring-slate-200 transition focus:ring-2 focus:ring-blue-500 dark:ring-0"
+            >
+              <option>Semua Bulan</option>
+              {monthOptions.map((month) => (
+                <option key={month}>{month}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+            <button
+              type="button"
+              onClick={handleSearchAction}
+              className="h-12 rounded-2xl bg-blue-600 px-6 font-semibold text-white transition hover:bg-blue-700"
+            >
+              Cari Jurnal
+            </button>
+
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="h-12 rounded-2xl border border-slate-200 bg-white px-5 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+            >
+              Reset Filter
+            </button>
+          </div>
         </div>
       </div>
 
