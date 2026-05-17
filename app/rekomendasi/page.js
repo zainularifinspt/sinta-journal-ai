@@ -33,6 +33,8 @@ export default function RekomendasiPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [recommendations, setRecommendations] = useState([]);
   const [loadingJournals, setLoadingJournals] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [recommendationSource, setRecommendationSource] = useState("");
   const [error, setError] = useState("");
   const [historyError, setHistoryError] = useState("");
 
@@ -55,8 +57,10 @@ export default function RekomendasiPage() {
         reason: item.reason,
         score: item.score,
         scoreLabel: item.scoreLabel,
-        matchedKeywords: item.matchedKeywords,
+        matchedKeywords: item.matchedKeywords ?? [],
         isFallback: item.isFallback,
+        saran: item.saran,
+        source: item.source ?? recommendationSource,
       })),
     });
 
@@ -76,7 +80,7 @@ export default function RekomendasiPage() {
 
     const { data, error: fetchError } = await supabase
       .from("journals")
-      .select("id, nama, bidang, scope, catatan_ai, sinta, publisher")
+      .select("id, nama, bidang, scope, catatan_ai, sinta, publisher, jadwal")
       .order("nama", { ascending: true });
 
     setLoadingJournals(false);
@@ -88,6 +92,32 @@ export default function RekomendasiPage() {
 
     setError("");
     return data ?? [];
+  }
+
+  async function getLocalFallbackRecommendations(combinedText) {
+    const latestJournals = await fetchJournalsForRecommendation();
+
+    if (latestJournals.length === 0) {
+      return {
+        recommendations: [],
+        summary: "",
+      };
+    }
+
+    const results = buildRecommendations(combinedText, latestJournals);
+
+    return {
+      recommendations: results.map((item) => ({
+        ...item,
+        journal_id: item.journal.id,
+        nama: item.journal.nama,
+        sinta: item.journal.sinta,
+        alasan: item.reason,
+        saran: "Periksa kembali focus and scope, template artikel, dan ketentuan author sebelum submit.",
+        source: "local",
+      })),
+      summary: "Rekomendasi dibuat dengan engine lokal karena layanan AI tidak tersedia.",
+    };
   }
 
   async function handleAnalyze() {
@@ -107,23 +137,54 @@ export default function RekomendasiPage() {
 
     setIsLoading(true);
     setRecommendations([]);
+    setSummary("");
+    setRecommendationSource("");
     setError("");
     setHistoryError("");
 
-    const latestJournals = await fetchJournalsForRecommendation();
+    try {
+      const response = await fetch("/api/recommend-ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          judul: title,
+          abstrak: abstract,
+          kata_kunci: keywords,
+        }),
+      });
+      const result = await response.json();
 
-    if (latestJournals.length === 0) {
-      setIsLoading(false);
-      return;
-    }
+      if (!response.ok) {
+        throw new Error(result.error ?? "Gagal membuat rekomendasi AI.");
+      }
 
-    window.setTimeout(async () => {
-      const results = buildRecommendations(combinedText, latestJournals);
+      const source = result.source ?? "openai";
+      const results = (result.recommendations ?? []).map((item) => ({
+        ...item,
+        source,
+      }));
 
       setRecommendations(results);
+      setSummary(result.summary ?? "");
+      setRecommendationSource(source);
       await saveRecommendationHistory(results);
+    } catch (analyzeError) {
+      const fallback = await getLocalFallbackRecommendations(combinedText);
+
+      if (fallback.recommendations.length === 0) {
+        setError(analyzeError.message ?? "Gagal membuat rekomendasi AI.");
+      } else {
+        setRecommendations(fallback.recommendations);
+        setSummary(fallback.summary);
+        setRecommendationSource("local");
+        await saveRecommendationHistory(fallback.recommendations);
+        toast.info("OpenAI tidak tersedia, rekomendasi dibuat dengan engine lokal.");
+      }
+    } finally {
       setIsLoading(false);
-    }, 900);
+    }
   }
 
   return (
@@ -132,13 +193,13 @@ export default function RekomendasiPage() {
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              Keyword Similarity
+              AI Recommendation
             </p>
             <h1 className="text-4xl font-bold">
               Rekomendasi Jurnal Cerdas
             </h1>
             <p className="mt-3 max-w-2xl text-slate-600 dark:text-gray-300">
-              Masukkan ringkasan artikel untuk mendapatkan Top 5 jurnal SINTA paling relevan berdasarkan kecocokan kata kunci.
+              Masukkan ringkasan artikel untuk mendapatkan Top 5 jurnal SINTA paling relevan dengan analisis AI.
             </p>
           </div>
 
@@ -219,7 +280,7 @@ export default function RekomendasiPage() {
                       Memuat data jurnal
                     </p>
                     <p className="mt-1 text-sm text-blue-700 dark:text-blue-200">
-                      Mengambil seluruh data dari Supabase sebelum scoring.
+                      Mengambil data jurnal dari Supabase untuk fallback lokal.
                     </p>
                   </div>
                   <span className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500/30 border-t-blue-600" />
@@ -251,7 +312,7 @@ export default function RekomendasiPage() {
                       Menganalisis kecocokan jurnal
                     </p>
                     <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">
-                      Menimbang judul, abstrak, kata kunci, bidang, scope, catatan AI, dan nama jurnal.
+                      Mengirim judul, abstrak, kata kunci, dan kandidat jurnal relevan ke server AI.
                     </p>
                   </div>
                 </div>
@@ -266,23 +327,33 @@ export default function RekomendasiPage() {
 
             {!isLoading && recommendations.length > 0 && (
               <div className="mt-6 grid gap-4">
+                {summary && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100">
+                    <p className="font-semibold">
+                      Ringkasan Analisis {recommendationSource === "local" ? "Lokal" : "AI"}
+                    </p>
+                    <p className="mt-2 leading-relaxed">
+                      {summary}
+                    </p>
+                  </div>
+                )}
                 {recommendations.map((recommendation) => (
                   <div
-                    key={recommendation.journal.id}
+                    key={recommendation.journal?.id ?? recommendation.journal_id}
                     className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/70 dark:border-white/10 dark:bg-white/10 dark:hover:shadow-black/20"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-2xl font-bold">
-                          {recommendation.journal.nama}
+                          {recommendation.nama ?? recommendation.journal?.nama}
                         </h3>
                         <p className="mt-2 text-slate-600 dark:text-gray-300">
-                          {recommendation.journal.bidang}
+                          {recommendation.journal?.bidang ?? recommendation.sinta}
                         </p>
                       </div>
 
                       <div className="flex flex-col items-end gap-2">
-                        <SintaBadge value={recommendation.journal.sinta} />
+                        <SintaBadge value={recommendation.sinta ?? recommendation.journal?.sinta} />
                         <span
                           className={`rounded-full border px-3 py-1 text-xs font-bold ${getScoreBadgeClass(
                             recommendation.score,
@@ -304,11 +375,11 @@ export default function RekomendasiPage() {
                         </span>
                       </div>
 
-                      {recommendation.matchedKeywords.length > 0 && (
+                      {(recommendation.matchedKeywords ?? []).length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {recommendation.matchedKeywords.slice(0, 6).map((keyword) => (
+                          {(recommendation.matchedKeywords ?? []).slice(0, 6).map((keyword) => (
                             <span
-                              key={`${recommendation.journal.id}-${keyword}`}
+                              key={`${recommendation.journal?.id ?? recommendation.journal_id}-${keyword}`}
                               className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-200"
                             >
                               {keyword}
@@ -319,11 +390,17 @@ export default function RekomendasiPage() {
                     </div>
 
                     <p className="mt-5 leading-relaxed text-slate-700 dark:text-gray-200">
-                      {recommendation.reason}
+                      {recommendation.alasan ?? recommendation.reason}
                     </p>
 
+                    {recommendation.saran && (
+                      <p className="mt-3 rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-600 dark:bg-slate-950/40 dark:text-gray-300">
+                        <span className="font-bold">Saran:</span> {recommendation.saran}
+                      </p>
+                    )}
+
                     <Link
-                      href={`/jurnal/${recommendation.journal.id}`}
+                      href={`/jurnal/${recommendation.journal?.id ?? recommendation.journal_id}`}
                       className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 font-semibold text-white dark:bg-white dark:text-slate-950"
                     >
                       Lihat Detail Jurnal
