@@ -6,7 +6,7 @@ import { useState } from "react";
 
 const features = [
   {
-    href: "/jurnal",
+    href: "/search",
     icon: "S1",
     title: "Cek Peringkat SINTA",
     description: "Temukan jurnal SINTA 1 sampai SINTA 6 dengan filter cepat dan tampilan detail yang mudah dibandingkan.",
@@ -18,7 +18,7 @@ const features = [
     description: "Masukkan judul, abstrak, dan kata kunci untuk mendapatkan rekomendasi jurnal yang lebih relevan.",
   },
   {
-    href: "/jurnal",
+    href: "/search",
     icon: "JT",
     title: "Jadwal Terbit",
     description: "Lihat informasi publisher, jadwal, scope, ISSN, dan website jurnal dalam satu tampilan.",
@@ -56,7 +56,7 @@ export default function Home() {
 
   function goToSearch() {
     const query = searchTerm.trim();
-    const target = query ? `/jurnal?search=${encodeURIComponent(query)}` : "/jurnal";
+    const target = query ? `/search?search=${encodeURIComponent(query)}` : "/search";
 
     router.push(target);
   }

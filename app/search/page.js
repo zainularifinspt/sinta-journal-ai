@@ -3,14 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import FavoriteIcon from "../components/FavoriteIcon";
 import SintaBadge from "../components/SintaBadge";
-import DashboardPageShell from "../components/DashboardPageShell";
 import { supabase } from "@/lib/supabase";
 
 const PAGE_SIZE = 10;
-const SEARCH_COUNT_KEY = "journalSearchCount";
 const sintaOptions = ["SINTA 1", "SINTA 2", "SINTA 3", "SINTA 4", "SINTA 5", "SINTA 6"];
 
 function sanitizeSearch(value) {
@@ -61,15 +57,8 @@ function applySorting(query, sortBy) {
   return query.order("nama", { ascending: true });
 }
 
-export default function JurnalPage() {
-  return (
-    <DashboardPageShell title="Cari Jurnal">
-      <JurnalPageContent />
-    </DashboardPageShell>
-  );
-}
-
-function JurnalPageContent() {
+export default function SearchPage() {
+  const router = useRouter();
   const [journals, setJournals] = useState([]);
   const [searchTerm, setSearchTerm] = useState(() => {
     if (typeof window === "undefined") {
@@ -87,13 +76,9 @@ function JurnalPageContent() {
   const [filteredCount, setFilteredCount] = useState(0);
   const [bidangOptions, setBidangOptions] = useState([]);
   const [publisherOptions, setPublisherOptions] = useState([]);
-  const [favoriteIds, setFavoriteIds] = useState([]);
-  const [userId, setUserId] = useState(null);
-  const [favoriteLoadingId, setFavoriteLoadingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [metadataLoading, setMetadataLoading] = useState(true);
   const [error, setError] = useState("");
-  const [favoriteError, setFavoriteError] = useState("");
 
   const totalPages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
   const fromItem = filteredCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
@@ -102,33 +87,21 @@ function JurnalPageContent() {
   useEffect(() => {
     let isActive = true;
 
-    async function fetchSessionAndMetadata() {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const currentUserId = sessionData?.session?.user?.id ?? null;
-      const favoritesQuery = currentUserId
-        ? supabase
-            .from("favorites")
-            .select("journal_id")
-            .eq("user_id", currentUserId)
-        : Promise.resolve({ data: [], error: null });
-
+    async function fetchMetadata() {
       const [
         { data: metadataData, error: metadataError, count },
-        { data: favoritesData, error: favoritesError },
       ] = await Promise.all([
         supabase
           .from("journals")
           .select("bidang, publisher", { count: "exact" })
           .order("bidang", { ascending: true })
           .limit(5000),
-        favoritesQuery,
       ]);
 
       if (!isActive) {
         return;
       }
 
-      setUserId(currentUserId);
       setTotalJournals(count ?? 0);
 
       if (metadataError) {
@@ -146,18 +119,10 @@ function JurnalPageContent() {
         );
       }
 
-      if (favoritesError) {
-        setFavoriteError(favoritesError.message);
-        setFavoriteIds([]);
-      } else {
-        setFavoriteError("");
-        setFavoriteIds((favoritesData ?? []).map((favorite) => String(favorite.journal_id)));
-      }
-
       setMetadataLoading(false);
     }
 
-    fetchSessionAndMetadata();
+    fetchMetadata();
 
     return () => {
       isActive = false;
@@ -224,50 +189,10 @@ function JurnalPageContent() {
     };
   }, [currentPage, filterState, sortBy]);
 
-  async function toggleFavorite(journalId) {
-    if (!userId) {
-      toast.info("Login untuk menyimpan jurnal favorit.");
-      router.push("/login");
-      return;
-    }
-
-    const normalizedId = String(journalId);
-    const isFavorite = favoriteIds.includes(normalizedId);
-
-    setFavoriteLoadingId(normalizedId);
-    setFavoriteError("");
-
-    const { error: favoriteMutationError } = isFavorite
-      ? await supabase
-          .from("favorites")
-          .delete()
-          .eq("user_id", userId)
-          .eq("journal_id", journalId)
-      : await supabase
-          .from("favorites")
-          .insert({ user_id: userId, journal_id: journalId });
-
-    if (favoriteMutationError) {
-      setFavoriteError(favoriteMutationError.message);
-      toast.error("Favorit gagal diproses", { description: favoriteMutationError.message });
-    } else {
-      setFavoriteIds((currentFavorites) =>
-        isFavorite
-          ? currentFavorites.filter((id) => id !== normalizedId)
-          : [...currentFavorites, normalizedId]
-      );
-      toast.success(isFavorite ? "Favorit dihapus" : "Jurnal disimpan ke favorit");
-    }
-
-    setFavoriteLoadingId(null);
-  }
-
   function handleSearchAction() {
-    const currentCount = Number(window.localStorage.getItem(SEARCH_COUNT_KEY) ?? 0);
-    window.localStorage.setItem(SEARCH_COUNT_KEY, String(currentCount + 1));
     const query = searchTerm.trim();
 
-    router.replace(query ? `/jurnal?search=${encodeURIComponent(query)}` : "/jurnal");
+    router.replace(query ? `/search?search=${encodeURIComponent(query)}` : "/search");
     setCurrentPage(1);
   }
 
@@ -286,7 +211,10 @@ function JurnalPageContent() {
   }
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-10">
+    <main className="min-h-screen bg-slate-100 text-slate-950 transition-colors dark:bg-slate-950 dark:text-white">
+      <PublicSearchHeader />
+
+      <section className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-10">
         <h1 className="mb-3 text-4xl font-bold">
           Cari Jurnal SINTA
         </h1>
@@ -376,12 +304,6 @@ function JurnalPageContent() {
         </div>
       </div>
 
-      {favoriteError && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
-          {favoriteError}
-        </div>
-      )}
-
       {error && (
         <div className="mb-5 rounded-2xl border border-red-200 bg-white p-6 shadow-sm dark:border-red-500/20 dark:bg-white/10">
           <h2 className="text-2xl font-bold text-red-700 dark:text-red-200">
@@ -443,25 +365,11 @@ function JurnalPageContent() {
 
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <Link
-                      href={`/jurnal/${journal.id}`}
+                      href={`/search/${journal.id}`}
                       className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 font-semibold text-white dark:bg-white dark:text-slate-950"
                     >
                       Lihat Detail
                     </Link>
-
-                    <button
-                      type="button"
-                      onClick={() => toggleFavorite(journal.id)}
-                      disabled={favoriteLoadingId === String(journal.id)}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 font-semibold text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-                    >
-                      <FavoriteIcon saved={favoriteIds.includes(String(journal.id))} />
-                      {favoriteLoadingId === String(journal.id)
-                        ? "Memproses..."
-                        : favoriteIds.includes(String(journal.id))
-                          ? "Tersimpan"
-                          : "Simpan Favorit"}
-                    </button>
                   </div>
                 </div>
               ))}
@@ -525,9 +433,38 @@ function JurnalPageContent() {
         </>
       )}
       </section>
-    );
+    </main>
+  );
 }
 
+function PublicSearchHeader() {
+  return (
+    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80">
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-8">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 font-black text-white shadow-lg shadow-blue-600/20">
+            SA
+          </div>
+          <div>
+            <p className="font-black leading-tight tracking-tight">
+              SINTA Journal AI
+            </p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-400">
+              Public Search
+            </p>
+          </div>
+        </Link>
+
+        <Link
+          href="/login"
+          className="inline-flex rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100"
+        >
+          Login
+        </Link>
+      </div>
+    </header>
+  );
+}
 
 function StatCard({ label, value }) {
   return (
@@ -565,7 +502,6 @@ function JournalSkeleton() {
             </div>
             <div className="mt-5 flex gap-3">
               <div className="h-11 w-28 rounded-xl bg-slate-200 dark:bg-white/10" />
-              <div className="h-11 w-36 rounded-xl bg-slate-200 dark:bg-white/10" />
             </div>
           </div>
         </div>
