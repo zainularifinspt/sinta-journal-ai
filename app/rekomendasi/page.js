@@ -5,9 +5,26 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import DashboardPageShell from "../components/DashboardPageShell";
+import FavoriteIcon from "../components/FavoriteIcon";
 import SintaBadge from "../components/SintaBadge";
 import { buildRecommendations } from "@/lib/recommendation";
 import { supabase } from "@/lib/supabase";
+
+function getRecommendationJournalId(recommendation) {
+  return recommendation.journal?.id ?? recommendation.journal_id;
+}
+
+function getRecommendationLabel(score, isFallback) {
+  if (isFallback || score < 55) {
+    return "Perlu Dipertimbangkan";
+  }
+
+  if (score >= 80) {
+    return "Sangat Cocok";
+  }
+
+  return "Cocok";
+}
 
 function getScoreBadgeClass(score, isFallback) {
   if (isFallback) {
@@ -32,6 +49,8 @@ export default function RekomendasiPage() {
   const [keywords, setKeywords] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [recommendations, setRecommendations] = useState([]);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [favoriteLoadingId, setFavoriteLoadingId] = useState(null);
   const [loadingJournals, setLoadingJournals] = useState(false);
   const [summary, setSummary] = useState("");
   const [recommendationSource, setRecommendationSource] = useState("");
@@ -54,9 +73,13 @@ export default function RekomendasiPage() {
       kata_kunci: keywords,
       hasil: results.map((item) => ({
         journal: item.journal,
-        reason: item.reason,
+        journal_id: getRecommendationJournalId(item),
+        nama: item.nama ?? item.journal?.nama,
+        sinta: item.sinta ?? item.journal?.sinta,
+        reason: item.reason ?? item.alasan,
+        alasan: item.alasan ?? item.reason,
         score: item.score,
-        scoreLabel: item.scoreLabel,
+        scoreLabel: item.scoreLabel ?? getRecommendationLabel(item.score, item.isFallback),
         matchedKeywords: item.matchedKeywords ?? [],
         isFallback: item.isFallback,
         saran: item.saran,
@@ -73,6 +96,67 @@ export default function RekomendasiPage() {
     setHistoryError("");
     toast.success("Rekomendasi berhasil disimpan ke riwayat");
     return true;
+  }
+
+  async function refreshFavoriteIds(userId, results) {
+    const journalIds = results.map(getRecommendationJournalId).filter(Boolean);
+
+    if (!userId || journalIds.length === 0) {
+      setFavoriteIds([]);
+      return;
+    }
+
+    const { data, error: favoritesError } = await supabase
+      .from("favorites")
+      .select("journal_id")
+      .eq("user_id", userId)
+      .in("journal_id", journalIds);
+
+    if (favoritesError) {
+      toast.error("Gagal memuat status favorit", { description: favoritesError.message });
+      setFavoriteIds([]);
+      return;
+    }
+
+    setFavoriteIds((data ?? []).map((favorite) => String(favorite.journal_id)));
+  }
+
+  async function toggleFavorite(journalId) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData?.session?.user?.id;
+
+    if (!userId || !journalId) {
+      router.push("/login");
+      return;
+    }
+
+    const normalizedId = String(journalId);
+    const isFavorite = favoriteIds.includes(normalizedId);
+
+    setFavoriteLoadingId(normalizedId);
+
+    const { error: favoriteError } = isFavorite
+      ? await supabase
+          .from("favorites")
+          .delete()
+          .eq("user_id", userId)
+          .eq("journal_id", journalId)
+      : await supabase
+          .from("favorites")
+          .insert({ user_id: userId, journal_id: journalId });
+
+    if (favoriteError) {
+      toast.error("Favorit gagal diproses", { description: favoriteError.message });
+    } else {
+      setFavoriteIds((currentFavorites) =>
+        isFavorite
+          ? currentFavorites.filter((id) => id !== normalizedId)
+          : [...currentFavorites, normalizedId]
+      );
+      toast.success(isFavorite ? "Jurnal dihapus dari favorit" : "Jurnal berhasil disimpan ke favorit");
+    }
+
+    setFavoriteLoadingId(null);
   }
 
   async function fetchJournalsForRecommendation() {
@@ -163,12 +247,14 @@ export default function RekomendasiPage() {
       const source = result.source ?? "openai";
       const results = (result.recommendations ?? []).map((item) => ({
         ...item,
+        scoreLabel: item.scoreLabel ?? getRecommendationLabel(item.score, item.isFallback),
         source,
       }));
 
       setRecommendations(results);
       setSummary(result.summary ?? "");
       setRecommendationSource(source);
+      await refreshFavoriteIds(sessionData.session.user.id, results);
       await saveRecommendationHistory(results);
     } catch (analyzeError) {
       const fallback = await getLocalFallbackRecommendations(combinedText);
@@ -179,6 +265,7 @@ export default function RekomendasiPage() {
         setRecommendations(fallback.recommendations);
         setSummary(fallback.summary);
         setRecommendationSource("local");
+        await refreshFavoriteIds(sessionData.session.user.id, fallback.recommendations);
         await saveRecommendationHistory(fallback.recommendations);
         toast.info("OpenAI tidak tersedia, rekomendasi dibuat dengan engine lokal.");
       }
@@ -360,7 +447,7 @@ export default function RekomendasiPage() {
                             recommendation.isFallback
                           )}`}
                         >
-                          {recommendation.scoreLabel}
+                          {recommendation.scoreLabel ?? getRecommendationLabel(recommendation.score, recommendation.isFallback)}
                         </span>
                       </div>
                     </div>
@@ -399,12 +486,28 @@ export default function RekomendasiPage() {
                       </p>
                     )}
 
-                    <Link
-                      href={`/jurnal/${recommendation.journal?.id ?? recommendation.journal_id}`}
-                      className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 font-semibold text-white dark:bg-white dark:text-slate-950"
-                    >
-                      Lihat Detail Jurnal
-                    </Link>
+                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                      <Link
+                        href={`/jurnal/${getRecommendationJournalId(recommendation)}`}
+                        className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 font-semibold text-white dark:bg-white dark:text-slate-950"
+                      >
+                        Lihat Detail
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleFavorite(getRecommendationJournalId(recommendation))}
+                        disabled={favoriteLoadingId === String(getRecommendationJournalId(recommendation))}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 font-semibold text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                      >
+                        <FavoriteIcon saved={favoriteIds.includes(String(getRecommendationJournalId(recommendation)))} />
+                        {favoriteLoadingId === String(getRecommendationJournalId(recommendation))
+                          ? "Memproses..."
+                          : favoriteIds.includes(String(getRecommendationJournalId(recommendation)))
+                            ? "Tersimpan"
+                            : "Simpan Favorit"}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

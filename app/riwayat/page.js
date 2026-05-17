@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import DashboardPageShell from "../components/DashboardPageShell";
+import FavoriteIcon from "../components/FavoriteIcon";
 import SintaBadge from "../components/SintaBadge";
 import { supabase } from "@/lib/supabase";
 
@@ -15,10 +16,44 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function getResultJournal(result) {
+  return result?.journal ?? {
+    id: result?.journal_id,
+    nama: result?.nama,
+    sinta: result?.sinta,
+  };
+}
+
+function getScoreLabel(score, isFallback) {
+  if (isFallback || Number(score) < 55) {
+    return "Perlu Dipertimbangkan";
+  }
+
+  if (Number(score) >= 80) {
+    return "Sangat Cocok";
+  }
+
+  return "Cocok";
+}
+
+function getScoreBadgeClass(score, isFallback) {
+  if (isFallback || Number(score) < 55) {
+    return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200";
+  }
+
+  if (Number(score) >= 80) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200";
+  }
+
+  return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200";
+}
+
 export default function RiwayatPage() {
   const router = useRouter();
   const [history, setHistory] = useState([]);
   const [userId, setUserId] = useState(null);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [favoriteLoadingId, setFavoriteLoadingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -47,6 +82,11 @@ export default function RiwayatPage() {
         .eq("user_id", currentUserId)
         .order("created_at", { ascending: false });
 
+      const { data: favoritesData, error: favoritesError } = await supabase
+        .from("favorites")
+        .select("journal_id")
+        .eq("user_id", currentUserId);
+
       if (!isActive) {
         return;
       }
@@ -57,6 +97,13 @@ export default function RiwayatPage() {
       } else {
         setError("");
         setHistory(data ?? []);
+      }
+
+      if (favoritesError) {
+        toast.error("Gagal memuat status favorit", { description: favoritesError.message });
+        setFavoriteIds([]);
+      } else {
+        setFavoriteIds((favoritesData ?? []).map((favorite) => String(favorite.journal_id)));
       }
 
       setLoading(false);
@@ -120,6 +167,43 @@ export default function RiwayatPage() {
     }
 
     setDeleting(false);
+  }
+
+  async function toggleFavorite(journalId) {
+    if (!userId || !journalId) {
+      router.push("/login");
+      return;
+    }
+
+    const normalizedId = String(journalId);
+    const isFavorite = favoriteIds.includes(normalizedId);
+
+    setFavoriteLoadingId(normalizedId);
+    setError("");
+
+    const { error: favoriteError } = isFavorite
+      ? await supabase
+          .from("favorites")
+          .delete()
+          .eq("user_id", userId)
+          .eq("journal_id", journalId)
+      : await supabase
+          .from("favorites")
+          .insert({ user_id: userId, journal_id: journalId });
+
+    if (favoriteError) {
+      setError(favoriteError.message);
+      toast.error("Favorit gagal diproses", { description: favoriteError.message });
+    } else {
+      setFavoriteIds((currentFavorites) =>
+        isFavorite
+          ? currentFavorites.filter((id) => id !== normalizedId)
+          : [...currentFavorites, normalizedId]
+      );
+      toast.success(isFavorite ? "Jurnal dihapus dari favorit" : "Jurnal berhasil disimpan ke favorit");
+    }
+
+    setFavoriteLoadingId(null);
   }
 
   return (
@@ -226,44 +310,84 @@ export default function RiwayatPage() {
                   )}
 
                   {results.map((result, index) => {
-                    const journal = result.journal;
+                    const journal = getResultJournal(result);
+                    const journalId = journal?.id ?? result.journal_id;
+                    const scoreLabel = result.scoreLabel ?? getScoreLabel(result.score, result.isFallback);
 
                     return (
                       <div
-                        key={`${item.id}-${journal?.id ?? index}`}
+                        key={`${item.id}-${journalId ?? index}`}
                         className="rounded-xl bg-slate-50 p-4 dark:bg-slate-950/40"
                       >
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
-                            <p className="font-semibold">
-                              {journal?.nama ?? "Jurnal tidak tersedia"}
-                            </p>
+                            {journalId ? (
+                              <Link
+                                href={`/jurnal/${journalId}`}
+                                className="font-semibold transition hover:text-blue-600 dark:hover:text-blue-300"
+                              >
+                                {journal?.nama ?? result.nama ?? "Jurnal tidak tersedia"}
+                              </Link>
+                            ) : (
+                              <p className="font-semibold">
+                                {journal?.nama ?? result.nama ?? "Jurnal tidak tersedia"}
+                              </p>
+                            )}
                             <p className="mt-1 text-slate-600 dark:text-gray-300">
                               {journal?.bidang ?? "-"}
                             </p>
                           </div>
 
-                          {journal?.sinta && <SintaBadge value={journal.sinta} />}
+                          <div className="flex flex-col items-start gap-2 md:items-end">
+                            {journal?.sinta && <SintaBadge value={journal.sinta} />}
+                            {result.score !== undefined && (
+                              <span className={`rounded-full border px-3 py-1 text-xs font-bold ${getScoreBadgeClass(result.score, result.isFallback)}`}>
+                                {scoreLabel}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <p className="mt-3 leading-relaxed text-slate-700 dark:text-gray-200">
-                          {result.reason}
+                          {result.alasan ?? result.reason}
                         </p>
+
+                        {result.saran && (
+                          <p className="mt-3 rounded-xl bg-white p-3 text-sm leading-relaxed text-slate-600 dark:bg-white/5 dark:text-gray-300">
+                            <span className="font-bold">Saran:</span> {result.saran}
+                          </p>
+                        )}
+
+                        {journalId && (
+                          <div className="mt-4 flex flex-wrap items-center gap-3">
+                            <Link
+                              href={`/jurnal/${journalId}`}
+                              className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 px-4 font-semibold text-white dark:bg-white dark:text-slate-950"
+                            >
+                              Lihat Detail
+                            </Link>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleFavorite(journalId)}
+                              disabled={favoriteLoadingId === String(journalId)}
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-semibold text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                            >
+                              <FavoriteIcon saved={favoriteIds.includes(String(journalId))} />
+                              {favoriteLoadingId === String(journalId)
+                                ? "Memproses..."
+                                : favoriteIds.includes(String(journalId))
+                                  ? "Tersimpan"
+                                  : "Simpan Favorit"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
 
                 <div className="mt-5 flex flex-wrap items-center gap-3">
-                  {primaryJournal?.id && (
-                    <Link
-                      href={`/jurnal/${primaryJournal.id}`}
-                      className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 font-semibold text-white dark:bg-white dark:text-slate-950"
-                    >
-                      Lihat Detail Jurnal
-                    </Link>
-                  )}
-
                   <button
                     type="button"
                     onClick={() => removeHistory(item.id)}
