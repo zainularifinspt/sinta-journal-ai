@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
+import { toast } from "sonner";
 import DashboardPageShell from "@/app/components/DashboardPageShell";
 import SintaBadge from "@/app/components/SintaBadge";
 import { supabase } from "@/lib/supabase";
@@ -142,10 +143,12 @@ export default function AdminJournalsPage() {
 
     if (saveError) {
       setError(saveError.message);
+      toast.error("Gagal menyimpan jurnal", { description: saveError.message });
     } else {
       setForm(emptyForm);
       setEditingId(null);
       setSuccess(editingId ? "Perubahan jurnal berhasil disimpan." : "Jurnal baru berhasil ditambahkan.");
+      toast.success(editingId ? "Jurnal berhasil diperbarui" : "Jurnal berhasil ditambahkan");
       await fetchJournals();
     }
 
@@ -167,8 +170,10 @@ export default function AdminJournalsPage() {
 
     if (deleteError) {
       setError(deleteError.message);
+      toast.error("Gagal menghapus jurnal", { description: deleteError.message });
     } else {
       setSuccess("Jurnal berhasil dihapus.");
+      toast.success("Jurnal berhasil dihapus");
       await fetchJournals();
     }
   }
@@ -244,6 +249,7 @@ export default function AdminJournalsPage() {
       });
 
       if (successCount > 0) {
+        toast.success(`${successCount} jurnal berhasil diimport`);
         await fetchJournals();
       }
     } catch (importException) {
@@ -339,6 +345,7 @@ export default function AdminJournalsPage() {
       setSintaError(insertError.message);
     } else {
       setSintaSuccess("Jurnal berhasil disimpan ke database.");
+      toast.success("Jurnal berhasil disimpan");
       await fetchJournals();
     }
 

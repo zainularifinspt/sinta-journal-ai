@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import DashboardPageShell from "../components/DashboardPageShell";
 import FavoriteIcon from "../components/FavoriteIcon";
 import SintaBadge from "../components/SintaBadge";
@@ -79,10 +80,12 @@ export default function FavoritPage() {
 
     if (deleteError) {
       setError(deleteError.message);
+      toast.error("Gagal menghapus favorit", { description: deleteError.message });
     } else {
       setFavorites((currentFavorites) =>
         currentFavorites.filter((favorite) => String(favorite.journal_id) !== String(journalId))
       );
+      toast.success("Favorit berhasil dihapus");
     }
 
     setDeleting(false);
@@ -104,8 +107,10 @@ export default function FavoritPage() {
 
     if (deleteError) {
       setError(deleteError.message);
+      toast.error("Gagal menghapus favorit", { description: deleteError.message });
     } else {
       setFavorites([]);
+      toast.success("Semua favorit berhasil dihapus");
     }
 
     setDeleting(false);
@@ -164,10 +169,19 @@ export default function FavoritPage() {
         )}
 
         {!loading && !error && favorites.length === 0 && (
-          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm dark:bg-white/10 dark:border-white/10">
-            <h2 className="text-2xl font-bold">
+          <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-white/80 p-10 text-center shadow-sm dark:border-white/10 dark:bg-white/10">
+            <h2 className="text-2xl font-black">
               Belum ada jurnal favorit
             </h2>
+            <p className="mx-auto mt-3 max-w-md text-slate-600 dark:text-gray-300">
+              Simpan jurnal dari halaman pencarian untuk membuat daftar referensi pribadi Anda.
+            </p>
+            <Link
+              href="/jurnal"
+              className="mt-5 inline-flex rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white transition hover:-translate-y-0.5 hover:bg-blue-700"
+            >
+              Cari Jurnal
+            </Link>
           </div>
         )}
 
@@ -181,7 +195,7 @@ export default function FavoritPage() {
           return (
             <div
               key={favorite.id}
-            className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm dark:bg-white/10 dark:border-white/10"
+            className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/70 dark:border-white/10 dark:bg-white/10 dark:hover:shadow-black/20"
           >
             <div className="flex justify-between items-start mb-4">
               <div>

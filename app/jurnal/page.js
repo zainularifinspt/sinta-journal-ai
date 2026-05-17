@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import DashboardPageShell from "../components/DashboardPageShell";
 import FavoriteIcon from "../components/FavoriteIcon";
 import SintaBadge from "../components/SintaBadge";
@@ -240,12 +241,14 @@ export default function JurnalPage() {
 
     if (favoriteMutationError) {
       setFavoriteError(favoriteMutationError.message);
+      toast.error("Favorit gagal diproses", { description: favoriteMutationError.message });
     } else {
       setFavoriteIds((currentFavorites) =>
         isFavorite
           ? currentFavorites.filter((id) => id !== normalizedId)
           : [...currentFavorites, normalizedId]
       );
+      toast.success(isFavorite ? "Favorit dihapus" : "Jurnal disimpan ke favorit");
     }
 
     setFavoriteLoadingId(null);
@@ -290,7 +293,7 @@ export default function JurnalPage() {
         <StatCard label="Publisher Unik" value={metadataLoading ? "..." : publisherOptions.length} />
       </div>
 
-      <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10">
+      <div className="sticky top-24 z-10 mb-8 rounded-[1.5rem] border border-slate-200/80 bg-white/85 p-5 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-white/10 dark:bg-slate-900/80 dark:shadow-black/20 md:p-6">
         <div className="grid gap-4 xl:grid-cols-6">
           <input
             type="text"
@@ -408,7 +411,7 @@ export default function JurnalPage() {
               {journals.map((journal) => (
                 <div
                   key={journal.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10"
+                  className="group rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/70 dark:border-white/10 dark:bg-white/10 dark:hover:shadow-black/20"
                 >
                   <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>

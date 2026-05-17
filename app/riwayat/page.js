@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import DashboardPageShell from "../components/DashboardPageShell";
 import SintaBadge from "../components/SintaBadge";
 import { supabase } from "@/lib/supabase";
@@ -85,10 +86,12 @@ export default function RiwayatPage() {
 
     if (deleteError) {
       setError(deleteError.message);
+      toast.error("Gagal menghapus riwayat", { description: deleteError.message });
     } else {
       setHistory((currentHistory) =>
         currentHistory.filter((item) => item.id !== historyId)
       );
+      toast.success("Riwayat berhasil dihapus");
     }
 
     setDeleting(false);
@@ -110,8 +113,10 @@ export default function RiwayatPage() {
 
     if (deleteError) {
       setError(deleteError.message);
+      toast.error("Gagal menghapus riwayat", { description: deleteError.message });
     } else {
       setHistory([]);
+      toast.success("Semua riwayat berhasil dihapus");
     }
 
     setDeleting(false);
@@ -173,10 +178,13 @@ export default function RiwayatPage() {
           )}
 
           {!loading && !error && history.length === 0 && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10">
-              <h2 className="text-2xl font-bold">
+            <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-white/80 p-10 text-center shadow-sm dark:border-white/10 dark:bg-white/10">
+              <h2 className="text-2xl font-black">
                 Belum ada riwayat rekomendasi.
               </h2>
+              <p className="mx-auto mt-3 max-w-md text-slate-600 dark:text-gray-300">
+                Buat rekomendasi AI untuk menyimpan histori pencocokan jurnal Anda.
+              </p>
             </div>
           )}
 
@@ -188,7 +196,7 @@ export default function RiwayatPage() {
             return (
               <article
                 key={item.id}
-                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10"
+                className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/70 dark:border-white/10 dark:bg-white/10 dark:hover:shadow-black/20"
               >
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>

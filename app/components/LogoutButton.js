@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 export default function LogoutButton() {
@@ -20,8 +21,9 @@ export default function LogoutButton() {
       type="button"
       onClick={handleLogout}
       disabled={loading}
-      className="block w-full whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10 dark:hover:text-red-200 md:text-base"
+      className="group flex w-full items-center gap-3 whitespace-nowrap rounded-2xl px-4 py-3 text-left text-sm font-bold text-red-100 transition hover:translate-x-1 hover:bg-red-500/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
     >
+      <LogOut size={19} className="text-red-200 group-hover:text-white" />
       {loading ? "Keluar..." : "Logout"}
     </button>
   );

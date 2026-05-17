@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import DashboardPageShell from "../components/DashboardPageShell";
 import SintaBadge from "../components/SintaBadge";
 import { supabase } from "@/lib/supabase";
@@ -130,10 +131,12 @@ export default function RekomendasiPage() {
 
     if (insertError) {
       setHistoryError(insertError.message);
+      toast.error("Riwayat gagal disimpan", { description: insertError.message });
       return false;
     }
 
     setHistoryError("");
+    toast.success("Rekomendasi berhasil disimpan ke riwayat");
     return true;
   }
 
@@ -184,7 +187,7 @@ export default function RekomendasiPage() {
         </div>
 
         <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10 md:p-8">
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white/90 p-6 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:shadow-black/20 md:p-8">
             <div className="grid gap-5">
               <label className="grid gap-2">
                 <span className="font-semibold">
@@ -239,7 +242,7 @@ export default function RekomendasiPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10 md:p-8">
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white/90 p-6 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:shadow-black/20 md:p-8">
             <h2 className="text-2xl font-bold">
               Hasil Rekomendasi
             </h2>
