@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import { buildRecommendations } from "@/lib/recommendation";
 
 const MAX_CANDIDATES = 30;
 const MAX_RESULTS = 5;
+const GEMINI_MODEL = "gemini-2.5-flash-lite";
+const GEMINI_FALLBACK_MODEL = "gemini-2.5-flash";
+const GEMINI_QUOTA_MESSAGE =
+  "Kuota Gemini API habis atau belum aktif. Sistem menggunakan rekomendasi lokal.";
 
 function createSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -34,7 +38,48 @@ function getScoreLabel(score) {
   return "Kurang Cocok";
 }
 
-function toLocalFallbackRecommendations(text, journals) {
+function getGeminiErrorDetails(error) {
+  const message = error?.message ?? "Layanan Gemini tidak dapat digunakan.";
+  const status = error?.status ?? error?.statusCode ?? error?.response?.status ?? null;
+  const isQuotaError = status === 429 || message.toLowerCase().includes("quota");
+
+  if (isQuotaError) {
+    return {
+      message: GEMINI_QUOTA_MESSAGE,
+      status,
+    };
+  }
+
+  return {
+    message: "AI online belum tersedia. Sistem menggunakan rekomendasi lokal.",
+    status,
+  };
+}
+
+function extractJsonObject(text) {
+  const rawText = String(text ?? "").trim();
+
+  if (!rawText) {
+    throw new Error("Gemini tidak mengembalikan teks response.");
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    const fencedJson = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    const candidateText = fencedJson?.[1] ?? rawText;
+    const startIndex = candidateText.indexOf("{");
+    const endIndex = candidateText.lastIndexOf("}");
+
+    if (startIndex === -1 || endIndex === -1 || endIndex <= startIndex) {
+      throw new Error("Response Gemini tidak berisi JSON valid.");
+    }
+
+    return JSON.parse(candidateText.slice(startIndex, endIndex + 1));
+  }
+}
+
+function toLocalFallbackRecommendations(text, journals, aiError = "") {
   const localRecommendations = buildRecommendations(text, journals, MAX_RESULTS);
 
   return {
@@ -53,6 +98,7 @@ function toLocalFallbackRecommendations(text, journals) {
     })),
     summary: "Rekomendasi dibuat dengan engine lokal karena layanan AI tidak tersedia.",
     source: "local",
+    ai_error: aiError,
   };
 }
 
@@ -87,6 +133,21 @@ function normalizeAiRecommendations(aiRecommendations, candidates) {
     })
     .filter(Boolean)
     .slice(0, MAX_RESULTS);
+}
+
+async function generateGeminiRecommendations(gemini, model, payload) {
+  console.log("[recommend-ai] Gemini model:", model);
+
+  return gemini.models.generateContent({
+    model,
+    contents: JSON.stringify(payload),
+    config: {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      systemInstruction:
+        "Anda adalah asisten rekomendasi jurnal akademik. Nilai relevansi jurnal terhadap artikel penelitian secara realistis berdasarkan judul, abstrak, kata kunci, bidang, scope, catatan AI, nama jurnal, publisher, jadwal, dan SINTA. Pilih maksimal 5 jurnal paling relevan. Gunakan journal_id hanya dari kandidat_jurnal. Score harus 0-100. Balas hanya JSON valid tanpa markdown atau penjelasan tambahan.",
+    },
+  });
 }
 
 export async function POST(request) {
@@ -127,107 +188,91 @@ export async function POST(request) {
       });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(toLocalFallbackRecommendations(combinedText, candidates));
+    const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY);
+    console.log("[recommend-ai] GEMINI_API_KEY configured:", hasGeminiKey);
+
+    if (!hasGeminiKey) {
+      const missingKeyMessage = "GEMINI_API_KEY belum terbaca di server.";
+      console.error("[recommend-ai] Gemini error:", missingKeyMessage);
+      return NextResponse.json(toLocalFallbackRecommendations(combinedText, candidates, missingKeyMessage));
     }
 
     try {
-      const openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
+      const gemini = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
       });
-      const response = await openai.responses.create({
-        model: "gpt-5-nano",
-        input: [
-          {
-            role: "system",
-            content:
-              "Anda adalah asisten rekomendasi jurnal akademik. Nilai relevansi jurnal terhadap artikel penelitian secara realistis berdasarkan judul, abstrak, kata kunci, bidang, scope, catatan AI, nama jurnal, publisher, jadwal, dan SINTA. Balas hanya JSON valid sesuai schema.",
-          },
-          {
-            role: "user",
-            content: JSON.stringify({
-              artikel: {
-                judul,
-                abstrak,
-                kata_kunci: kataKunci,
-              },
-              kandidat_jurnal: candidates.map((journal) => ({
-                id: journal.id,
-                nama: journal.nama,
-                sinta: journal.sinta,
-                publisher: journal.publisher,
-                bidang: journal.bidang,
-                jadwal: journal.jadwal,
-                scope: journal.scope,
-                catatan_ai: journal.catatan_ai,
-              })),
-              instruksi:
-                "Pilih maksimal 5 jurnal paling relevan. Gunakan journal_id hanya dari kandidat_jurnal. Score 0-100. Alasan dan saran ditulis singkat dalam Bahasa Indonesia.",
-            }),
-          },
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "journal_recommendations",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              required: ["recommendations", "summary"],
-              properties: {
-                recommendations: {
-                  type: "array",
-                  maxItems: MAX_RESULTS,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    required: ["journal_id", "nama", "sinta", "score", "alasan", "saran"],
-                    properties: {
-                      journal_id: {
-                        type: "string",
-                      },
-                      nama: {
-                        type: "string",
-                      },
-                      sinta: {
-                        type: "string",
-                      },
-                      score: {
-                        type: "number",
-                      },
-                      alasan: {
-                        type: "string",
-                      },
-                      saran: {
-                        type: "string",
-                      },
-                    },
-                  },
-                },
-                summary: {
-                  type: "string",
-                },
-              },
-            },
-          },
+      const geminiPayload = {
+        artikel: {
+          judul,
+          abstrak,
+          kata_kunci: kataKunci,
         },
-      });
-      const parsed = JSON.parse(response.output_text);
+        kandidat_jurnal: candidates.map((journal) => ({
+          id: journal.id,
+          nama: journal.nama,
+          sinta: journal.sinta,
+          publisher: journal.publisher,
+          bidang: journal.bidang,
+          jadwal: journal.jadwal,
+          scope: journal.scope,
+          catatan_ai: journal.catatan_ai,
+        })),
+        format_output: {
+          summary: "string",
+          recommendations: [
+            {
+              journal_id: "id kandidat jurnal",
+              nama: "nama jurnal",
+              sinta: "peringkat SINTA",
+              score: "angka 0-100",
+              alasan: "alasan singkat dalam Bahasa Indonesia",
+              saran: "saran singkat dalam Bahasa Indonesia",
+            },
+          ],
+        },
+      };
+      let response;
+
+      try {
+        response = await generateGeminiRecommendations(gemini, GEMINI_MODEL, geminiPayload);
+      } catch (primaryModelError) {
+        console.error(
+          "[recommend-ai] Gemini primary model failed:",
+          primaryModelError?.message ?? primaryModelError
+        );
+        response = await generateGeminiRecommendations(gemini, GEMINI_FALLBACK_MODEL, geminiPayload);
+      }
+      const parsed = extractJsonObject(response.text);
       const recommendations = normalizeAiRecommendations(parsed.recommendations ?? [], candidates);
 
       if (recommendations.length === 0) {
-        return NextResponse.json(toLocalFallbackRecommendations(combinedText, candidates));
+        return NextResponse.json(
+          toLocalFallbackRecommendations(
+            combinedText,
+            candidates,
+            "Gemini berhasil merespons, tetapi tidak mengembalikan rekomendasi yang cocok dengan kandidat jurnal."
+          )
+        );
       }
 
       return NextResponse.json({
         recommendations,
         summary: parsed.summary ?? "Rekomendasi AI berhasil dibuat.",
-        source: "openai",
+        source: "gemini",
       });
-    } catch (openAiError) {
-      console.error("[recommend-ai] OpenAI fallback:", openAiError);
-      return NextResponse.json(toLocalFallbackRecommendations(combinedText, candidates));
+    } catch (geminiError) {
+      const errorDetails = getGeminiErrorDetails(geminiError);
+      console.error("[recommend-ai] Gemini error message:", errorDetails.message);
+      console.error("[recommend-ai] Gemini error status:", errorDetails.status);
+      return NextResponse.json(
+        toLocalFallbackRecommendations(
+          combinedText,
+          candidates,
+          errorDetails.status
+            ? `${errorDetails.message} (status ${errorDetails.status})`
+            : errorDetails.message
+        )
+      );
     }
   } catch (error) {
     return NextResponse.json(

@@ -42,6 +42,14 @@ function getScoreBadgeClass(score, isFallback) {
   return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200";
 }
 
+function getLocalSummaryText(source) {
+  if (source === "local") {
+    return "AI online belum tersedia, sehingga sistem menggunakan pencocokan lokal berdasarkan bidang, scope, dan kata kunci.";
+  }
+
+  return "";
+}
+
 export default function RekomendasiPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -55,6 +63,7 @@ export default function RekomendasiPage() {
   const [summary, setSummary] = useState("");
   const [recommendationSource, setRecommendationSource] = useState("");
   const [error, setError] = useState("");
+  const [aiError, setAiError] = useState("");
   const [historyError, setHistoryError] = useState("");
 
   async function saveRecommendationHistory(results) {
@@ -224,6 +233,7 @@ export default function RekomendasiPage() {
     setSummary("");
     setRecommendationSource("");
     setError("");
+    setAiError("");
     setHistoryError("");
 
     try {
@@ -244,7 +254,7 @@ export default function RekomendasiPage() {
         throw new Error(result.error ?? "Gagal membuat rekomendasi AI.");
       }
 
-      const source = result.source ?? "openai";
+      const source = result.source ?? "gemini";
       const results = (result.recommendations ?? []).map((item) => ({
         ...item,
         scoreLabel: item.scoreLabel ?? getRecommendationLabel(item.score, item.isFallback),
@@ -254,20 +264,23 @@ export default function RekomendasiPage() {
       setRecommendations(results);
       setSummary(result.summary ?? "");
       setRecommendationSource(source);
+      setAiError(result.ai_error ?? "");
       await refreshFavoriteIds(sessionData.session.user.id, results);
       await saveRecommendationHistory(results);
     } catch (analyzeError) {
       const fallback = await getLocalFallbackRecommendations(combinedText);
+      const fallbackErrorMessage = analyzeError.message ?? "Gagal membuat rekomendasi AI.";
 
       if (fallback.recommendations.length === 0) {
-        setError(analyzeError.message ?? "Gagal membuat rekomendasi AI.");
+        setError(fallbackErrorMessage);
       } else {
         setRecommendations(fallback.recommendations);
         setSummary(fallback.summary);
         setRecommendationSource("local");
+        setAiError(fallbackErrorMessage);
         await refreshFavoriteIds(sessionData.session.user.id, fallback.recommendations);
         await saveRecommendationHistory(fallback.recommendations);
-        toast.info("OpenAI tidak tersedia, rekomendasi dibuat dengan engine lokal.");
+        toast.info("Gemini tidak tersedia, rekomendasi dibuat dengan engine lokal.");
       }
     } finally {
       setIsLoading(false);
@@ -298,10 +311,10 @@ export default function RekomendasiPage() {
           </Link>
         </div>
 
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-[1.5rem] border border-slate-200 bg-white/90 p-6 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:shadow-black/20 md:p-8">
+        <section className="grid min-w-0 gap-6">
+          <div className="w-full rounded-[1.5rem] border border-slate-200 bg-white/90 p-6 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:shadow-black/20 md:p-8">
             <div className="grid gap-5">
-              <label className="grid gap-2">
+              <label className="grid min-w-0 gap-2">
                 <span className="font-semibold">
                   Judul Artikel
                 </span>
@@ -310,24 +323,24 @@ export default function RekomendasiPage() {
                   onChange={(event) => setTitle(event.target.value)}
                   rows={3}
                   placeholder="Contoh: Pengembangan media pembelajaran matematika berbasis AI"
-                  className="resize-none rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+                  className="min-h-24 w-full resize-y rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:bg-white dark:ring-0"
                 />
               </label>
 
-              <label className="grid gap-2">
+              <label className="grid min-w-0 gap-2">
                 <span className="font-semibold">
                   Abstrak
                 </span>
                 <textarea
                   value={abstract}
                   onChange={(event) => setAbstract(event.target.value)}
-                  rows={7}
+                  rows={10}
                   placeholder="Tuliskan abstrak artikel Anda..."
-                  className="resize-none rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+                  className="min-h-64 w-full resize-y rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:bg-white dark:ring-0"
                 />
               </label>
 
-              <label className="grid gap-2">
+              <label className="grid min-w-0 gap-2">
                 <span className="font-semibold">
                   Kata Kunci
                 </span>
@@ -336,7 +349,7 @@ export default function RekomendasiPage() {
                   onChange={(event) => setKeywords(event.target.value)}
                   rows={3}
                   placeholder="Contoh: pembelajaran, statistika, artificial intelligence"
-                  className="resize-none rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+                  className="min-h-24 w-full resize-y rounded-xl bg-white p-4 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:bg-white dark:ring-0"
                 />
               </label>
 
@@ -354,7 +367,7 @@ export default function RekomendasiPage() {
             </div>
           </div>
 
-          <div className="rounded-[1.5rem] border border-slate-200 bg-white/90 p-6 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:shadow-black/20 md:p-8">
+          <div className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-white/90 p-6 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:shadow-black/20 md:p-8">
             <h2 className="text-2xl font-bold">
               Hasil Rekomendasi
             </h2>
@@ -414,33 +427,43 @@ export default function RekomendasiPage() {
 
             {!isLoading && recommendations.length > 0 && (
               <div className="mt-6 grid gap-4">
+                {aiError && (
+                  <div className="max-w-full overflow-hidden rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
+                    <p className="break-words">
+                      AI online belum tersedia. Rekomendasi dibuat menggunakan engine lokal.
+                    </p>
+                  </div>
+                )}
+
                 {summary && (
                   <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100">
                     <p className="font-semibold">
-                      Ringkasan Analisis {recommendationSource === "local" ? "Lokal" : "AI"}
+                      {recommendationSource === "local" ? "Rekomendasi Lokal" : "Ringkasan Analisis AI"}
                     </p>
                     <p className="mt-2 leading-relaxed">
-                      {summary}
+                      {getLocalSummaryText(recommendationSource) || summary}
                     </p>
                   </div>
                 )}
                 {recommendations.map((recommendation) => (
                   <div
                     key={recommendation.journal?.id ?? recommendation.journal_id}
-                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/70 dark:border-white/10 dark:bg-white/10 dark:hover:shadow-black/20"
+                    className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/70 dark:border-white/10 dark:bg-white/10 dark:hover:shadow-black/20"
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="text-2xl font-bold">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <h3 className="break-words text-xl font-bold md:text-2xl">
                           {recommendation.nama ?? recommendation.journal?.nama}
                         </h3>
-                        <p className="mt-2 text-slate-600 dark:text-gray-300">
+                        <p className="mt-2 break-words text-sm text-slate-600 dark:text-gray-300 md:text-base">
                           {recommendation.journal?.bidang ?? recommendation.sinta}
                         </p>
                       </div>
 
-                      <div className="flex flex-col items-end gap-2">
-                        <SintaBadge value={recommendation.sinta ?? recommendation.journal?.sinta} />
+                      <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+                        <div className="scale-90 origin-left md:origin-right">
+                          <SintaBadge value={recommendation.sinta ?? recommendation.journal?.sinta} />
+                        </div>
                         <span
                           className={`rounded-full border px-3 py-1 text-xs font-bold ${getScoreBadgeClass(
                             recommendation.score,
@@ -452,18 +475,18 @@ export default function RekomendasiPage() {
                       </div>
                     </div>
 
-                    <div className="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 dark:bg-slate-950/40">
-                      <div className="flex items-center justify-between gap-3">
+                    <div className="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 dark:bg-slate-950/40 md:grid-cols-[1fr_auto] md:items-center">
+                      <div className="flex items-center gap-3">
                         <span className="text-sm font-semibold text-slate-500 dark:text-gray-400">
                           Score Kecocokan
                         </span>
-                        <span className="text-2xl font-black text-slate-950 dark:text-white">
-                          {recommendation.score}
-                        </span>
                       </div>
+                      <span className="text-3xl font-black text-slate-950 dark:text-white">
+                        {recommendation.score}
+                      </span>
 
                       {(recommendation.matchedKeywords ?? []).length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 md:col-span-2">
                           {(recommendation.matchedKeywords ?? []).slice(0, 6).map((keyword) => (
                             <span
                               key={`${recommendation.journal?.id ?? recommendation.journal_id}-${keyword}`}
@@ -476,17 +499,17 @@ export default function RekomendasiPage() {
                       )}
                     </div>
 
-                    <p className="mt-5 leading-relaxed text-slate-700 dark:text-gray-200">
+                    <p className="mt-5 break-words leading-relaxed text-slate-700 dark:text-gray-200">
                       {recommendation.alasan ?? recommendation.reason}
                     </p>
 
                     {recommendation.saran && (
-                      <p className="mt-3 rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-600 dark:bg-slate-950/40 dark:text-gray-300">
+                      <p className="mt-3 break-words rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-600 dark:bg-slate-950/40 dark:text-gray-300">
                         <span className="font-bold">Saran:</span> {recommendation.saran}
                       </p>
                     )}
 
-                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 md:flex md:flex-wrap md:items-center">
                       <Link
                         href={`/jurnal/${getRecommendationJournalId(recommendation)}`}
                         className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 font-semibold text-white dark:bg-white dark:text-slate-950"
