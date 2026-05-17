@@ -50,13 +50,6 @@ const steps = [
   "Dapatkan rekomendasi",
 ];
 
-const stats = [
-  ["1000+", "Data Jurnal"],
-  ["6", "Level SINTA"],
-  ["AI", "Recommendation"],
-  ["Supabase", "Database"],
-];
-
 export default function Home() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -193,13 +186,40 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-4 px-5 pb-16 pt-10 md:grid-cols-4 md:px-8 md:pb-20">
-        {stats.map(([value, label]) => (
-          <div key={label} className="rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 text-center shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/10">
-            <p className="text-3xl font-black text-blue-600 dark:text-blue-300">{value}</p>
-            <p className="mt-2 font-bold text-slate-600 dark:text-gray-300">{label}</p>
+      <section className="mx-auto max-w-7xl px-5 pb-16 pt-4 md:px-8 md:pb-20">
+        <div className="relative overflow-hidden rounded-[2.25rem] bg-[radial-gradient(circle_at_top_left,#2563eb_0,#0f172a_42%,#020617_100%)] p-8 text-white shadow-2xl shadow-blue-950/25 md:p-12">
+          <div className="absolute right-[-5rem] top-[-5rem] h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl" />
+          <div className="absolute bottom-[-6rem] left-[-6rem] h-64 w-64 rounded-full bg-blue-500/25 blur-3xl" />
+
+          <div className="relative flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.24em] text-blue-200">
+                Research workflow
+              </p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-black tracking-tight md:text-5xl">
+                Siap menemukan jurnal yang tepat?
+              </h2>
+              <p className="mt-4 max-w-2xl text-base leading-8 text-blue-50/85 md:text-lg">
+                Login sekarang untuk mengakses pencarian jurnal, rekomendasi AI, favorit, dan dashboard penelitian.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row md:shrink-0">
+              <Link
+                href="/login"
+                className="inline-flex min-h-13 items-center justify-center rounded-2xl bg-white px-6 py-4 font-black text-slate-950 shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-blue-50"
+              >
+                Login
+              </Link>
+              <Link
+                href="/jurnal"
+                className="inline-flex min-h-13 items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-6 py-4 font-black text-white backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/20"
+              >
+                Cari Jurnal
+              </Link>
+            </div>
           </div>
-        ))}
+        </div>
       </section>
 
       <footer className="border-t border-slate-200/70 px-5 py-8 text-center text-sm font-semibold text-slate-500 dark:border-white/10 dark:text-gray-400">
