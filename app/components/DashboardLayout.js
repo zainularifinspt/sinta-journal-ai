@@ -27,6 +27,7 @@ const commonMenus = [
   { label: "Favorit", href: "/favorit", icon: Heart },
   { label: "Riwayat", href: "/riwayat", icon: Clock3 },
   { label: "Profil", href: "/profil", icon: User },
+  { label: "Akun", href: "/akun", icon: User },
 ];
 
 const roleMenus = {

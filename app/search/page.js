@@ -84,9 +84,13 @@ function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [journals, setJournals] = useState([]);
-  const [searchTerm, setSearchTerm] = useState(() => {
-    return searchParams.get("search") ?? "";
-  });
+  
+  const initialSearch = searchParams.get("search") || "";
+  console.log("Search param:", initialSearch);
+  
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
+  console.log("Search term:", searchTerm);
+  
   const [selectedSinta, setSelectedSinta] = useState("Semua SINTA");
   const [selectedBidang, setSelectedBidang] = useState("Semua Bidang");
   const [selectedPublisher, setSelectedPublisher] = useState("Semua Publisher");
@@ -104,14 +108,15 @@ function SearchPageContent() {
   const fromItem = filteredCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const toItem = Math.min(currentPage * PAGE_SIZE, filteredCount);
 
-  // Sync searchTerm dengan URL parameter
+  // Sync searchTerm dengan URL parameter saat URL berubah
   useEffect(() => {
-    const paramSearch = searchParams.get("search") ?? "";
-    if (paramSearch !== searchTerm) {
-      setSearchTerm(paramSearch);
+    const urlSearch = searchParams.get("search") || "";
+    if (urlSearch && urlSearch !== searchTerm) {
+      console.log("Updating searchTerm from URL:", urlSearch);
+      setSearchTerm(urlSearch);
       setCurrentPage(1);
     }
-  }, [searchParams, searchTerm]);
+  }, [searchParams.get("search")]);
 
   useEffect(() => {
     let isActive = true;

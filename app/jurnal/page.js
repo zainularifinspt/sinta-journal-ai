@@ -70,6 +70,7 @@ export default function JurnalPage() {
 }
 
 function JurnalPageContent() {
+  const router = useRouter();
   const [journals, setJournals] = useState([]);
   const [searchTerm, setSearchTerm] = useState(() => {
     if (typeof window === "undefined") {

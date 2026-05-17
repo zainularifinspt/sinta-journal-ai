@@ -29,6 +29,13 @@ for select
 to authenticated
 using (public.is_admin(auth.uid()));
 
+drop policy if exists "Admin can view all profiles" on public.profiles;
+create policy "Admin can view all profiles"
+on public.profiles
+for select
+to authenticated
+using (public.is_admin(auth.uid()));
+
 drop policy if exists "Users can insert own profile" on public.profiles;
 create policy "Users can insert own profile"
 on public.profiles
@@ -43,6 +50,22 @@ for update
 to authenticated
 using (auth.uid() = id)
 with check (auth.uid() = id);
+
+drop policy if exists "Admins can update all profiles" on public.profiles;
+create policy "Admins can update all profiles"
+on public.profiles
+for update
+to authenticated
+using (public.is_admin(auth.uid()))
+with check (public.is_admin(auth.uid()));
+
+drop policy if exists "Admin can update all profiles" on public.profiles;
+create policy "Admin can update all profiles"
+on public.profiles
+for update
+to authenticated
+using (public.is_admin(auth.uid()))
+with check (public.is_admin(auth.uid()));
 
 drop policy if exists "Public can select journals" on public.journals;
 create policy "Public can select journals"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import DashboardPageShell from "@/app/components/DashboardPageShell";
@@ -45,6 +45,47 @@ const excelHeaders = [
   "catatan_ai",
 ];
 
+const duplicateIdentifierMessage = "Jurnal dengan ISSN/e-ISSN ini sudah terdaftar.";
+
+function normalizeIdentifier(value) {
+  return String(value ?? "")
+    .replace(/[^0-9xX]/g, "")
+    .toUpperCase();
+}
+
+function getJournalIdentifiers(journal) {
+  return [journal.issn, journal.eissn].map(normalizeIdentifier).filter(Boolean);
+}
+
+function hasDuplicateIdentifier(journals, payload, ignoredId = null) {
+  const identifiers = getJournalIdentifiers(payload);
+
+  if (identifiers.length === 0) {
+    return false;
+  }
+
+  return journals.some((journal) => {
+    if (ignoredId && journal.id === ignoredId) {
+      return false;
+    }
+
+    const existingIdentifiers = getJournalIdentifiers(journal);
+    return identifiers.some((identifier) => existingIdentifiers.includes(identifier));
+  });
+}
+
+async function fetchJournalIdentifiers() {
+  const { data, error } = await supabase
+    .from("journals")
+    .select("id, issn, eissn");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ?? [];
+}
+
 export default function AdminJournalsPage() {
   const [journals, setJournals] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -65,8 +106,32 @@ export default function AdminJournalsPage() {
   const [sintaSaving, setSintaSaving] = useState(false);
   const [sintaError, setSintaError] = useState("");
   const [sintaSuccess, setSintaSuccess] = useState("");
+  const [filters, setFilters] = useState({
+    search: "",
+    sinta: "",
+  });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const filteredJournals = useMemo(() => {
+    const normalizedSearch = filters.search.trim().toLowerCase();
+
+    return journals.filter((journal) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        [
+          journal.nama,
+          journal.issn,
+          journal.eissn,
+          journal.publisher,
+        ]
+          .map((value) => String(value ?? "").toLowerCase())
+          .some((value) => value.includes(normalizedSearch));
+      const matchesSinta = !filters.sinta || journal.sinta === filters.sinta;
+
+      return matchesSearch && matchesSinta;
+    });
+  }, [filters, journals]);
 
   useEffect(() => {
     fetchJournals();
@@ -131,11 +196,41 @@ export default function AdminJournalsPage() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
 
     const payload = {
       ...form,
       nama: form.nama.trim(),
+      sinta: form.sinta.trim(),
+      issn: form.issn.trim(),
+      eissn: form.eissn.trim(),
     };
+
+    if (!payload.nama || !payload.sinta) {
+      setError("Nama dan SINTA wajib diisi.");
+      toast.error("Nama dan SINTA wajib diisi");
+      setSaving(false);
+      return;
+    }
+
+    let identifierJournals = journals;
+
+    try {
+      identifierJournals = await fetchJournalIdentifiers();
+    } catch (identifierError) {
+      setError(identifierError.message);
+      toast.error("Gagal memeriksa duplikat jurnal", { description: identifierError.message });
+      setSaving(false);
+      return;
+    }
+
+    if (hasDuplicateIdentifier(identifierJournals, payload, editingId)) {
+      setError(duplicateIdentifierMessage);
+      toast.error(duplicateIdentifierMessage);
+      setSaving(false);
+      return;
+    }
+
     const query = editingId
       ? supabase.from("journals").update(payload).eq("id", editingId)
       : supabase.from("journals").insert(payload);
@@ -215,42 +310,63 @@ export default function AdminJournalsPage() {
 
       const worksheet = workbook.Sheets[firstSheetName];
       const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-      const validRows = [];
-      let failedCount = 0;
+      const existingJournals = await fetchJournalIdentifiers();
+      const existingIdentifiers = new Set((existingJournals ?? []).flatMap(getJournalIdentifiers));
+      const importedIdentifiers = new Set();
+      const rowsToImport = [];
+      let duplicateCount = 0;
+      let incompleteCount = 0;
 
       rows.forEach((row) => {
         const payload = normalizeImportRow(row);
 
         if (!payload.nama || !payload.sinta) {
-          failedCount += 1;
+          incompleteCount += 1;
           return;
         }
 
-        validRows.push(payload);
+        const identifiers = getJournalIdentifiers(payload);
+        const isDuplicate = identifiers.some(
+          (identifier) => existingIdentifiers.has(identifier) || importedIdentifiers.has(identifier)
+        );
+
+        if (isDuplicate) {
+          duplicateCount += 1;
+          return;
+        }
+
+        identifiers.forEach((identifier) => importedIdentifiers.add(identifier));
+        rowsToImport.push(payload);
       });
 
       let successCount = 0;
+      let saveFailedCount = 0;
 
-      for (const payload of validRows) {
+      for (const payload of rowsToImport) {
         const { error: insertError } = await supabase
           .from("journals")
           .insert(payload);
 
         if (insertError) {
-          failedCount += 1;
+          saveFailedCount += 1;
         } else {
           successCount += 1;
+          getJournalIdentifiers(payload).forEach((identifier) => existingIdentifiers.add(identifier));
         }
       }
 
       setImportResult({
         success: successCount,
-        failed: failedCount,
+        duplicate: duplicateCount,
+        incomplete: incompleteCount,
+        saveFailed: saveFailedCount,
       });
 
       if (successCount > 0) {
         toast.success(`${successCount} jurnal berhasil diimport`);
         await fetchJournals();
+      } else {
+        toast.info("Tidak ada jurnal baru yang diimport");
       }
     } catch (importException) {
       setImportError(importException.message ?? "Gagal membaca file Excel.");
@@ -328,8 +444,32 @@ export default function AdminJournalsPage() {
   }
 
   async function saveSintaJournal(payload) {
-    if (!payload.nama || !payload.sinta) {
+    const cleanPayload = {
+      ...payload,
+      nama: String(payload.nama ?? "").trim(),
+      sinta: String(payload.sinta ?? "").trim(),
+      issn: String(payload.issn ?? "").trim(),
+      eissn: String(payload.eissn ?? "").trim(),
+    };
+
+    if (!cleanPayload.nama || !cleanPayload.sinta) {
       setSintaError("Nama dan SINTA wajib tersedia sebelum disimpan.");
+      return;
+    }
+
+    let identifierJournals = journals;
+
+    try {
+      identifierJournals = await fetchJournalIdentifiers();
+    } catch (identifierError) {
+      setSintaError(identifierError.message);
+      toast.error("Gagal memeriksa duplikat jurnal", { description: identifierError.message });
+      return;
+    }
+
+    if (hasDuplicateIdentifier(identifierJournals, cleanPayload)) {
+      setSintaError(duplicateIdentifierMessage);
+      toast.error(duplicateIdentifierMessage);
       return;
     }
 
@@ -339,7 +479,7 @@ export default function AdminJournalsPage() {
 
     const { error: insertError } = await supabase
       .from("journals")
-      .insert(payload);
+      .insert(cleanPayload);
 
     if (insertError) {
       setSintaError(insertError.message);
@@ -468,7 +608,7 @@ export default function AdminJournalsPage() {
                 Data Jurnal
               </h2>
               <p className="mt-1 text-sm text-slate-600 dark:text-gray-300">
-                Total {journals.length} jurnal.
+                Menampilkan {filteredJournals.length} dari {journals.length} jurnal.
               </p>
             </div>
 
@@ -508,6 +648,49 @@ export default function AdminJournalsPage() {
             </div>
           </div>
 
+          <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950/40 md:grid-cols-[1fr_180px]">
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-slate-600 dark:text-gray-300">
+                Cari nama, ISSN/e-ISSN, atau publisher
+              </span>
+              <input
+                value={filters.search}
+                onChange={(event) =>
+                  setFilters((currentFilters) => ({
+                    ...currentFilters,
+                    search: event.target.value,
+                  }))
+                }
+                placeholder="Ketik nama jurnal, ISSN, e-ISSN, publisher..."
+                className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+              />
+            </label>
+
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-slate-600 dark:text-gray-300">
+                Filter SINTA
+              </span>
+              <select
+                value={filters.sinta}
+                onChange={(event) =>
+                  setFilters((currentFilters) => ({
+                    ...currentFilters,
+                    sinta: event.target.value,
+                  }))
+                }
+                className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+              >
+                <option value="">Semua SINTA</option>
+                <option>SINTA 1</option>
+                <option>SINTA 2</option>
+                <option>SINTA 3</option>
+                <option>SINTA 4</option>
+                <option>SINTA 5</option>
+                <option>SINTA 6</option>
+              </select>
+            </label>
+          </div>
+
           {loading && (
             <p className="rounded-xl bg-slate-100 p-4 font-semibold text-slate-700 dark:bg-slate-950/40 dark:text-gray-200">
               Memuat data jurnal...
@@ -527,18 +710,21 @@ export default function AdminJournalsPage() {
                   <tr>
                     <th className="py-3 pr-4">Nama</th>
                     <th className="py-3 pr-4">SINTA</th>
-                    <th className="py-3 pr-4">ISSN</th>
+                    <th className="py-3 pr-4">ISSN/e-ISSN</th>
                     <th className="py-3 pr-4">Publisher</th>
                     <th className="py-3 pr-4">Bidang</th>
                     <th className="py-3 pr-4">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                  {journals.map((journal) => (
+                  {filteredJournals.map((journal) => (
                     <tr key={journal.id}>
                       <td className="py-4 pr-4 font-semibold">{journal.nama}</td>
                       <td className="py-4 pr-4"><SintaBadge value={journal.sinta} /></td>
-                      <td className="py-4 pr-4 text-slate-600 dark:text-gray-300">{journal.issn ?? "-"}</td>
+                      <td className="py-4 pr-4 text-slate-600 dark:text-gray-300">
+                        <div>{journal.issn || "-"}</div>
+                        <div className="text-xs text-slate-500 dark:text-gray-400">{journal.eissn || "-"}</div>
+                      </td>
                       <td className="py-4 pr-4 text-slate-600 dark:text-gray-300">{journal.publisher ?? "-"}</td>
                       <td className="py-4 pr-4 text-slate-600 dark:text-gray-300">{journal.bidang ?? "-"}</td>
                       <td className="py-4 pr-4">
@@ -563,6 +749,11 @@ export default function AdminJournalsPage() {
                   ))}
                 </tbody>
               </table>
+              {filteredJournals.length === 0 && (
+                <p className="rounded-b-xl bg-slate-50 p-5 text-center font-semibold text-slate-600 dark:bg-slate-950/40 dark:text-gray-300">
+                  Tidak ada jurnal yang cocok dengan filter.
+                </p>
+              )}
             </div>
           )}
         </section>
@@ -621,8 +812,13 @@ export default function AdminJournalsPage() {
               )}
 
               {importResult && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
-                  Berhasil import {importResult.success} data. Gagal {importResult.failed} data.
+                <div className="grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <p>Berhasil diimport: {importResult.success} data.</p>
+                  <p>Dilewati karena duplikat: {importResult.duplicate} data.</p>
+                  <p>Gagal karena data tidak lengkap: {importResult.incomplete} data.</p>
+                  {importResult.saveFailed > 0 && (
+                    <p>Gagal disimpan karena error database: {importResult.saveFailed} data.</p>
+                  )}
                 </div>
               )}
             </div>
