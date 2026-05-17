@@ -193,34 +193,13 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-4 px-5 py-10 md:grid-cols-4 md:px-8">
+      <section className="mx-auto grid max-w-7xl gap-4 px-5 pb-16 pt-10 md:grid-cols-4 md:px-8 md:pb-20">
         {stats.map(([value, label]) => (
           <div key={label} className="rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 text-center shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/10">
             <p className="text-3xl font-black text-blue-600 dark:text-blue-300">{value}</p>
             <p className="mt-2 font-bold text-slate-600 dark:text-gray-300">{label}</p>
           </div>
         ))}
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
-        <div className="rounded-[2.25rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/20 dark:bg-white dark:text-slate-950 md:p-12">
-          <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-sm font-black uppercase tracking-[0.24em] text-blue-300 dark:text-blue-600">Mulai Sekarang</p>
-              <h2 className="mt-3 max-w-2xl text-3xl font-black tracking-tight md:text-5xl">
-                Mulai kelola pencarian jurnal Anda sekarang.
-              </h2>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/login" className="rounded-2xl bg-blue-600 px-6 py-4 font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-700">
-                Login
-              </Link>
-              <Link href="/jurnal" className="rounded-2xl bg-white px-6 py-4 font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-blue-50 dark:bg-slate-950 dark:text-white">
-                Cari Jurnal
-              </Link>
-            </div>
-          </div>
-        </div>
       </section>
 
       <footer className="border-t border-slate-200/70 px-5 py-8 text-center text-sm font-semibold text-slate-500 dark:border-white/10 dark:text-gray-400">
