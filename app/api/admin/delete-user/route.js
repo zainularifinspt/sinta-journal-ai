@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const allowedRoles = ["admin", "dosen", "mahasiswa"];
-
 function getBearerToken(request) {
   const authorization = request.headers.get("authorization") ?? "";
 
@@ -59,10 +57,10 @@ async function verifyAdmin(request, authClient, adminClient) {
   };
 }
 
-export async function PATCH(request) {
+export async function DELETE(request) {
   try {
     const { authClient, adminClient } = createSupabaseClients();
-    const { isAdmin } = await verifyAdmin(request, authClient, adminClient);
+    const { isAdmin, userId: currentUserId } = await verifyAdmin(request, authClient, adminClient);
 
     if (!isAdmin) {
       return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
@@ -70,10 +68,16 @@ export async function PATCH(request) {
 
     const body = await request.json();
     const userId = String(body.userId ?? "").trim();
-    const role = String(body.role ?? "").trim();
 
-    if (!userId || !allowedRoles.includes(role)) {
-      return NextResponse.json({ error: "User dan role valid wajib diisi." }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json({ error: "User wajib dipilih." }, { status: 400 });
+    }
+
+    if (userId === currentUserId) {
+      return NextResponse.json(
+        { error: "Admin tidak boleh menghapus akunnya sendiri." },
+        { status: 400 }
+      );
     }
 
     const { data: targetProfile, error: targetProfileError } = await adminClient
@@ -90,7 +94,7 @@ export async function PATCH(request) {
       return NextResponse.json({ error: "Profile user tidak ditemukan." }, { status: 404 });
     }
 
-    if (targetProfile.role === "admin" && role !== "admin") {
+    if (targetProfile.role === "admin") {
       const { count, error: countError } = await adminClient
         .from("profiles")
         .select("id", { count: "exact", head: true })
@@ -102,28 +106,34 @@ export async function PATCH(request) {
 
       if ((count ?? 0) <= 1) {
         return NextResponse.json(
-          { error: "Tidak bisa mengubah role admin terakhir." },
+          { error: "Tidak bisa menghapus admin terakhir." },
           { status: 400 }
         );
       }
     }
 
-    const { error: updateError } = await adminClient
+    const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(userId);
+
+    if (deleteAuthError) {
+      return NextResponse.json({ error: deleteAuthError.message }, { status: 400 });
+    }
+
+    const { error: deleteProfileError } = await adminClient
       .from("profiles")
-      .update({ role })
+      .delete()
       .eq("id", userId);
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    if (deleteProfileError) {
+      return NextResponse.json({ error: deleteProfileError.message }, { status: 400 });
     }
 
     return NextResponse.json({
       user: {
         id: userId,
-        role,
       },
+      message: "User berhasil dihapus.",
     });
   } catch (error) {
-    return NextResponse.json({ error: error.message ?? "Gagal mengubah role user." }, { status: 500 });
+    return NextResponse.json({ error: error.message ?? "Gagal menghapus user." }, { status: 500 });
   }
 }

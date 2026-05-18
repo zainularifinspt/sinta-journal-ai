@@ -14,6 +14,12 @@ const emptyForm = {
 
 const roles = ["admin", "dosen", "mahasiswa"];
 
+const roleStyles = {
+  admin: "border-rose-200 bg-rose-50 text-rose-700 dark:border-fuchsia-400/30 dark:bg-fuchsia-500/15 dark:text-fuchsia-100",
+  dosen: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-blue-100",
+  mahasiswa: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-100",
+};
+
 function formatDate(value) {
   if (!value) {
     return "-";
@@ -30,6 +36,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [roleUpdatingId, setRoleUpdatingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -54,9 +61,6 @@ export default function AdminUsersPage() {
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false });
-
-    console.log("[admin/users] data profiles hasil query:", data);
-    console.log("[admin/users] error hasil query:", fetchError);
 
     if (fetchError) {
       setError(fetchError.message);
@@ -144,8 +148,6 @@ export default function AdminUsersPage() {
       });
       const result = await response.json();
 
-      console.log("[admin/users] create user response:", result);
-
       if (!response.ok) {
         throw new Error(result.error ?? "Gagal menambahkan user.");
       }
@@ -223,6 +225,57 @@ export default function AdminUsersPage() {
     setRoleUpdatingId(null);
   }
 
+  async function handleDeleteUser(user, currentAdminId) {
+    if (user.id === currentAdminId) {
+      const message = "Admin tidak boleh menghapus akunnya sendiri.";
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
+    const confirmed = window.confirm(`Hapus user "${user.full_name || user.email}"? Aksi ini akan menghapus akun Auth dan profile.`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(user.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const accessToken = await getAccessToken();
+      const response = await fetch("/api/admin/delete-user", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.id,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Gagal menghapus user.");
+      }
+
+      setSuccess("User berhasil dihapus.");
+      toast.success("User berhasil dihapus");
+      const refreshedUsers = await fetchUsers();
+
+      if (refreshedUsers.error) {
+        throw new Error(refreshedUsers.error.message);
+      }
+    } catch (deleteError) {
+      setError(deleteError.message ?? "Gagal menghapus user.");
+      toast.error("Gagal menghapus user", { description: deleteError.message });
+    }
+
+    setDeletingId(null);
+  }
+
   async function handleResetPassword(event) {
     event.preventDefault();
     setResetting(true);
@@ -279,6 +332,8 @@ export default function AdminUsersPage() {
 
   return (
     <DashboardPageShell title="Kelola User" allowedRoles={["admin"]}>
+      {(currentAdmin) => (
+      <>
       <div className="grid gap-6">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10 md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -354,28 +409,44 @@ export default function AdminUsersPage() {
                       <td className="py-4 pr-4 font-semibold">{user.full_name || "-"}</td>
                       <td className="py-4 pr-4 text-slate-600 dark:text-gray-300">{user.email}</td>
                       <td className="py-4 pr-4">
-                        <select
-                          value={user.role}
-                          onChange={(event) => handleRoleChange(user, event.target.value)}
-                          disabled={roleUpdatingId === user.id}
-                          className="rounded-xl bg-white p-2 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:ring-0"
-                        >
-                          {roles.map((role) => (
-                            <option key={role} value={role}>
-                              {role}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={user.role}
+                            onChange={(event) => handleRoleChange(user, event.target.value)}
+                            disabled={roleUpdatingId === user.id}
+                            className={`min-w-32 appearance-none rounded-full border px-4 py-2 pr-8 text-sm font-bold capitalize outline-none transition focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 ${roleStyles[user.role] ?? roleStyles.mahasiswa}`}
+                          >
+                            {roles.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
+                          {roleUpdatingId === user.id && (
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600 dark:border-white/20 dark:border-t-blue-300" />
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 pr-4 text-slate-600 dark:text-gray-300">{formatDate(user.created_at)}</td>
                       <td className="py-4 pr-4">
-                        <button
-                          type="button"
-                          onClick={() => openResetPasswordModal(user)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-                        >
-                          Reset Password
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openResetPasswordModal(user)}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                          >
+                            Reset Password
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(user, currentAdmin.id)}
+                            disabled={user.id === currentAdmin.id || deletingId === user.id}
+                            title={user.id === currentAdmin.id ? "Admin tidak boleh menghapus akun sendiri" : undefined}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
+                          >
+                            {deletingId === user.id ? "Menghapus..." : "Hapus User"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -529,6 +600,8 @@ export default function AdminUsersPage() {
             </form>
           </div>
         </div>
+      )}
+      </>
       )}
     </DashboardPageShell>
   );
