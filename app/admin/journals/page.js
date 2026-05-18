@@ -90,7 +90,7 @@ export default function AdminJournalsPage() {
   const [journals, setJournals] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
-  const [formOpen, setFormOpen] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -242,6 +242,7 @@ export default function AdminJournalsPage() {
     } else {
       setForm(emptyForm);
       setEditingId(null);
+      setFormOpen(false);
       setSuccess(editingId ? "Perubahan jurnal berhasil disimpan." : "Jurnal baru berhasil ditambahkan.");
       toast.success(editingId ? "Jurnal berhasil diperbarui" : "Jurnal berhasil ditambahkan");
       await fetchJournals();
@@ -279,6 +280,36 @@ export default function AdminJournalsPage() {
 
     XLSX.utils.book_append_sheet(workbook, worksheet, "journals");
     XLSX.writeFile(workbook, "template-import-jurnal.xlsx");
+  }
+
+  function getExportRows() {
+    return filteredJournals.map((journal) =>
+      excelHeaders.reduce((row, header) => {
+        row[header] = journal[header] ?? "";
+        return row;
+      }, {})
+    );
+  }
+
+  function exportExcel() {
+    const worksheet = XLSX.utils.json_to_sheet(getExportRows(), { header: excelHeaders });
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, "journals");
+    XLSX.writeFile(workbook, "data-jurnal.xlsx");
+  }
+
+  function exportCsv() {
+    const worksheet = XLSX.utils.json_to_sheet(getExportRows(), { header: excelHeaders });
+    const csv = XLSX.utils.sheet_to_csv(worksheet);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "data-jurnal.csv";
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function normalizeImportRow(row) {
@@ -506,25 +537,75 @@ export default function AdminJournalsPage() {
 
   return (
     <DashboardPageShell title="Kelola Jurnal" allowedRoles={["admin"]}>
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.4fr]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10">
-          <div className="mb-5 flex items-center justify-between gap-4">
+      <div className="grid gap-6">
+        <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/10 md:p-6">
+          <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <h2 className="text-2xl font-bold">
-                {editingId ? "Edit Jurnal" : "Tambah Jurnal"}
+                Data Jurnal
               </h2>
               <p className="mt-1 text-sm text-slate-600 dark:text-gray-300">
-                Data akan disimpan ke tabel journals Supabase.
+                Menampilkan {filteredJournals.length} dari {journals.length} jurnal.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={startCreate}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-            >
-              Tambah
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={startCreate}
+                className="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-700"
+              >
+                Tambah Jurnal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setImportModalOpen(true);
+                  setImportError("");
+                  setImportResult(null);
+                }}
+                className="rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white transition hover:bg-emerald-700"
+              >
+                Import Excel
+              </button>
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+              >
+                Download Template Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSintaModalOpen(true);
+                  setSintaError("");
+                  setSintaSuccess("");
+                  setSintaPreview(null);
+                  setManualSintaData(emptyForm);
+                  setShowManualSintaForm(false);
+                }}
+                className="rounded-xl bg-teal-600 px-4 py-2 font-semibold text-white transition hover:bg-teal-700"
+              >
+                Import dari URL SINTA
+              </button>
+              <button
+                type="button"
+                onClick={exportExcel}
+                disabled={filteredJournals.length === 0}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+              >
+                Export Excel
+              </button>
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={filteredJournals.length === 0}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+              >
+                Export CSV
+              </button>
+            </div>
           </div>
 
           {success && (
@@ -533,16 +614,146 @@ export default function AdminJournalsPage() {
             </p>
           )}
 
-          {!formOpen && (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-slate-600 dark:border-white/10 dark:text-gray-300">
-              Klik tombol Tambah atau Edit untuk membuka form jurnal.
-            </div>
+          {error && (
+            <p className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+              {error}
+            </p>
           )}
 
-          {formOpen && (
-            <form onSubmit={handleSubmit} className="grid gap-4">
+          <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950/40 md:grid-cols-[minmax(0,1fr)_180px]">
+            <label className="grid min-w-0 gap-2">
+              <span className="text-sm font-semibold text-slate-600 dark:text-gray-300">
+                Cari nama, ISSN/e-ISSN, atau publisher
+              </span>
+              <input
+                value={filters.search}
+                onChange={(event) =>
+                  setFilters((currentFilters) => ({
+                    ...currentFilters,
+                    search: event.target.value,
+                  }))
+                }
+                placeholder="Ketik nama jurnal, ISSN, e-ISSN, publisher..."
+                className="min-w-0 rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+              />
+            </label>
+
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-slate-600 dark:text-gray-300">
+                Filter SINTA
+              </span>
+              <select
+                value={filters.sinta}
+                onChange={(event) =>
+                  setFilters((currentFilters) => ({
+                    ...currentFilters,
+                    sinta: event.target.value,
+                  }))
+                }
+                className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
+              >
+                <option value="">Semua SINTA</option>
+                <option>SINTA 1</option>
+                <option>SINTA 2</option>
+                <option>SINTA 3</option>
+                <option>SINTA 4</option>
+                <option>SINTA 5</option>
+                <option>SINTA 6</option>
+              </select>
+            </label>
+          </div>
+
+          {loading && (
+            <p className="rounded-xl bg-slate-100 p-4 font-semibold text-slate-700 dark:bg-slate-950/40 dark:text-gray-200">
+              Memuat data jurnal...
+            </p>
+          )}
+
+          {!loading && (
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/10">
+              <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-slate-950/40 dark:text-gray-400">
+                  <tr>
+                    <th className="w-[34%] px-4 py-3">Nama</th>
+                    <th className="w-[110px] px-4 py-3">SINTA</th>
+                    <th className="w-[150px] px-4 py-3">ISSN/e-ISSN</th>
+                    <th className="w-[22%] px-4 py-3">Publisher</th>
+                    <th className="w-[16%] px-4 py-3">Bidang</th>
+                    <th className="w-[150px] px-4 py-3 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+                  {filteredJournals.map((journal) => (
+                    <tr key={journal.id} className="align-top">
+                      <td className="break-words px-4 py-4 font-semibold leading-6">{journal.nama}</td>
+                      <td className="px-4 py-4"><SintaBadge value={journal.sinta} /></td>
+                      <td className="px-4 py-4 text-slate-600 dark:text-gray-300">
+                        <div className="break-words">{journal.issn || "-"}</div>
+                        <div className="break-words text-xs text-slate-500 dark:text-gray-400">{journal.eissn || "-"}</div>
+                      </td>
+                      <td className="break-words px-4 py-4 text-slate-600 dark:text-gray-300">{journal.publisher ?? "-"}</td>
+                      <td className="break-words px-4 py-4 text-slate-600 dark:text-gray-300">{journal.bidang ?? "-"}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(journal)}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(journal)}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredJournals.length === 0 && (
+                <p className="bg-slate-50 p-5 text-center font-semibold text-slate-600 dark:bg-slate-950/40 dark:text-gray-300">
+                  Tidak ada jurnal yang cocok dengan filter.
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {formOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-8">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold">
+                  {editingId ? "Edit Jurnal" : "Tambah Jurnal"}
+                </h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-gray-300">
+                  Data akan disimpan ke tabel journals Supabase.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setFormOpen(false)}
+                disabled={saving}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+              >
+                Tutup
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2">
               {fields.map((field) => (
-                <label key={field.name} className="grid gap-2">
+                <label
+                  key={field.name}
+                  className={`grid gap-2 ${field.type === "textarea" ? "md:col-span-2" : ""}`}
+                >
                   <span className="font-semibold">
                     {field.label}
                   </span>
@@ -580,7 +791,7 @@ export default function AdminJournalsPage() {
                 </label>
               ))}
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 md:col-span-2">
                 <button
                   type="submit"
                   disabled={saving}
@@ -592,172 +803,16 @@ export default function AdminJournalsPage() {
                 <button
                   type="button"
                   onClick={() => setFormOpen(false)}
-                  className="mt-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                  disabled={saving}
+                  className="mt-2 rounded-xl border border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
                 >
-                  Tutup Form
+                  Batal
                 </button>
               </div>
             </form>
-          )}
-        </section>
-
-        <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/10">
-          <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <h2 className="text-2xl font-bold">
-                Data Jurnal
-              </h2>
-              <p className="mt-1 text-sm text-slate-600 dark:text-gray-300">
-                Menampilkan {filteredJournals.length} dari {journals.length} jurnal.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={downloadTemplate}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-              >
-                Download Template Excel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setImportModalOpen(true);
-                  setImportError("");
-                  setImportResult(null);
-                }}
-                className="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-700"
-              >
-                Import Excel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSintaModalOpen(true);
-                  setSintaError("");
-                  setSintaSuccess("");
-                  setSintaPreview(null);
-                  setManualSintaData(emptyForm);
-                  setShowManualSintaForm(false);
-                }}
-                className="rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white transition hover:bg-emerald-700"
-              >
-                Import dari URL SINTA
-              </button>
-            </div>
           </div>
-
-          <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-950/40 md:grid-cols-[1fr_180px]">
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-slate-600 dark:text-gray-300">
-                Cari nama, ISSN/e-ISSN, atau publisher
-              </span>
-              <input
-                value={filters.search}
-                onChange={(event) =>
-                  setFilters((currentFilters) => ({
-                    ...currentFilters,
-                    search: event.target.value,
-                  }))
-                }
-                placeholder="Ketik nama jurnal, ISSN, e-ISSN, publisher..."
-                className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
-              />
-            </label>
-
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-slate-600 dark:text-gray-300">
-                Filter SINTA
-              </span>
-              <select
-                value={filters.sinta}
-                onChange={(event) =>
-                  setFilters((currentFilters) => ({
-                    ...currentFilters,
-                    sinta: event.target.value,
-                  }))
-                }
-                className="rounded-xl bg-white p-3 text-black outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-500 dark:ring-0"
-              >
-                <option value="">Semua SINTA</option>
-                <option>SINTA 1</option>
-                <option>SINTA 2</option>
-                <option>SINTA 3</option>
-                <option>SINTA 4</option>
-                <option>SINTA 5</option>
-                <option>SINTA 6</option>
-              </select>
-            </label>
-          </div>
-
-          {loading && (
-            <p className="rounded-xl bg-slate-100 p-4 font-semibold text-slate-700 dark:bg-slate-950/40 dark:text-gray-200">
-              Memuat data jurnal...
-            </p>
-          )}
-
-          {error && (
-            <p className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
-              {error}
-            </p>
-          )}
-
-          {!loading && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm">
-                <thead className="border-b border-slate-200 text-slate-500 dark:border-white/10 dark:text-gray-400">
-                  <tr>
-                    <th className="py-3 pr-4">Nama</th>
-                    <th className="py-3 pr-4">SINTA</th>
-                    <th className="py-3 pr-4">ISSN/e-ISSN</th>
-                    <th className="py-3 pr-4">Publisher</th>
-                    <th className="py-3 pr-4">Bidang</th>
-                    <th className="py-3 pr-4">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                  {filteredJournals.map((journal) => (
-                    <tr key={journal.id}>
-                      <td className="py-4 pr-4 font-semibold">{journal.nama}</td>
-                      <td className="py-4 pr-4"><SintaBadge value={journal.sinta} /></td>
-                      <td className="py-4 pr-4 text-slate-600 dark:text-gray-300">
-                        <div>{journal.issn || "-"}</div>
-                        <div className="text-xs text-slate-500 dark:text-gray-400">{journal.eissn || "-"}</div>
-                      </td>
-                      <td className="py-4 pr-4 text-slate-600 dark:text-gray-300">{journal.publisher ?? "-"}</td>
-                      <td className="py-4 pr-4 text-slate-600 dark:text-gray-300">{journal.bidang ?? "-"}</td>
-                      <td className="py-4 pr-4">
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(journal)}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(journal)}
-                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
-                          >
-                            Hapus
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {filteredJournals.length === 0 && (
-                <p className="rounded-b-xl bg-slate-50 p-5 text-center font-semibold text-slate-600 dark:bg-slate-950/40 dark:text-gray-300">
-                  Tidak ada jurnal yang cocok dengan filter.
-                </p>
-              )}
-            </div>
-          )}
-        </section>
-      </div>
+        </div>
+      )}
 
       {importModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-8">
