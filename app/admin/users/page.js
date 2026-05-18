@@ -41,6 +41,7 @@ export default function AdminUsersPage() {
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [userToDelete, setUserToDelete] = useState(null);
   const [resetPasswordForm, setResetPasswordForm] = useState({
     newPassword: "",
     confirmPassword: "",
@@ -225,7 +226,7 @@ export default function AdminUsersPage() {
     setRoleUpdatingId(null);
   }
 
-  async function handleDeleteUser(user, currentAdminId) {
+  function openDeleteUserModal(user, currentAdminId) {
     if (user.id === currentAdminId) {
       const message = "Admin tidak boleh menghapus akunnya sendiri.";
       setError(message);
@@ -233,13 +234,17 @@ export default function AdminUsersPage() {
       return;
     }
 
-    const confirmed = window.confirm(`Hapus user "${user.full_name || user.email}"? Aksi ini akan menghapus akun Auth dan profile.`);
+    setError("");
+    setSuccess("");
+    setUserToDelete(user);
+  }
 
-    if (!confirmed) {
+  async function confirmDeleteUser() {
+    if (!userToDelete?.id) {
       return;
     }
 
-    setDeletingId(user.id);
+    setDeletingId(userToDelete.id);
     setError("");
     setSuccess("");
 
@@ -252,7 +257,7 @@ export default function AdminUsersPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userId: user.id,
+          userId: userToDelete.id,
         }),
       });
       const result = await response.json();
@@ -263,6 +268,7 @@ export default function AdminUsersPage() {
 
       setSuccess("User berhasil dihapus.");
       toast.success("User berhasil dihapus");
+      setUserToDelete(null);
       const refreshedUsers = await fetchUsers();
 
       if (refreshedUsers.error) {
@@ -439,7 +445,7 @@ export default function AdminUsersPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDeleteUser(user, currentAdmin.id)}
+                            onClick={() => openDeleteUserModal(user, currentAdmin.id)}
                             disabled={user.id === currentAdmin.id || deletingId === user.id}
                             title={user.id === currentAdmin.id ? "Admin tidak boleh menghapus akun sendiri" : undefined}
                             className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
@@ -598,6 +604,43 @@ export default function AdminUsersPage() {
                 {resetting ? "Menyimpan..." : "Reset Password"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-8 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-slate-900">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-300">
+                Konfirmasi
+              </p>
+              <h2 className="mt-2 text-2xl font-bold">
+                Hapus User?
+              </h2>
+              <p className="mt-3 break-words text-slate-600 dark:text-gray-300">
+                Akun <span className="font-semibold text-slate-950 dark:text-white">{userToDelete.email}</span> akan dihapus dari Auth dan profiles.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                disabled={deletingId === userToDelete.id}
+                className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteUser}
+                disabled={deletingId === userToDelete.id}
+                className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-400"
+              >
+                {deletingId === userToDelete.id ? "Menghapus..." : "Hapus User"}
+              </button>
+            </div>
           </div>
         </div>
       )}

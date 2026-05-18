@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import DashboardPageShell from "@/app/components/DashboardPageShell";
-import SintaBadge from "@/app/components/SintaBadge";
+import SintaBadge, { normalizeSinta } from "@/app/components/SintaBadge";
 import { supabase } from "@/lib/supabase";
 
 const emptyForm = {
@@ -106,6 +106,8 @@ export default function AdminJournalsPage() {
   const [sintaSaving, setSintaSaving] = useState(false);
   const [sintaError, setSintaError] = useState("");
   const [sintaSuccess, setSintaSuccess] = useState("");
+  const [journalToDelete, setJournalToDelete] = useState(null);
+  const [deletingJournal, setDeletingJournal] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
     sinta: "",
@@ -127,7 +129,7 @@ export default function AdminJournalsPage() {
         ]
           .map((value) => String(value ?? "").toLowerCase())
           .some((value) => value.includes(normalizedSearch));
-      const matchesSinta = !filters.sinta || journal.sinta === filters.sinta;
+      const matchesSinta = !filters.sinta || normalizeSinta(journal.sinta) === filters.sinta;
 
       return matchesSearch && matchesSinta;
     });
@@ -178,7 +180,7 @@ export default function AdminJournalsPage() {
     setFormOpen(true);
     setForm({
       nama: journal.nama ?? "",
-      sinta: journal.sinta ?? "SINTA 1",
+      sinta: normalizeSinta(journal.sinta ?? "SINTA 1"),
       issn: journal.issn ?? "",
       eissn: journal.eissn ?? "",
       publisher: journal.publisher ?? "",
@@ -201,7 +203,7 @@ export default function AdminJournalsPage() {
     const payload = {
       ...form,
       nama: form.nama.trim(),
-      sinta: form.sinta.trim(),
+      sinta: normalizeSinta(form.sinta),
       issn: form.issn.trim(),
       eissn: form.eissn.trim(),
     };
@@ -251,18 +253,17 @@ export default function AdminJournalsPage() {
     setSaving(false);
   }
 
-  async function handleDelete(journal) {
-    const confirmed = window.confirm(`Hapus jurnal "${journal.nama}"?`);
-
-    if (!confirmed) {
+  async function confirmDeleteJournal() {
+    if (!journalToDelete?.id) {
       return;
     }
 
+    setDeletingJournal(true);
     setError("");
     const { error: deleteError } = await supabase
       .from("journals")
       .delete()
-      .eq("id", journal.id);
+      .eq("id", journalToDelete.id);
 
     if (deleteError) {
       setError(deleteError.message);
@@ -270,8 +271,11 @@ export default function AdminJournalsPage() {
     } else {
       setSuccess("Jurnal berhasil dihapus.");
       toast.success("Jurnal berhasil dihapus");
+      setJournalToDelete(null);
       await fetchJournals();
     }
+
+    setDeletingJournal(false);
   }
 
   function downloadTemplate() {
@@ -478,7 +482,7 @@ export default function AdminJournalsPage() {
     const cleanPayload = {
       ...payload,
       nama: String(payload.nama ?? "").trim(),
-      sinta: String(payload.sinta ?? "").trim(),
+      sinta: normalizeSinta(payload.sinta),
       issn: String(payload.issn ?? "").trim(),
       eissn: String(payload.eissn ?? "").trim(),
     };
@@ -704,7 +708,7 @@ export default function AdminJournalsPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDelete(journal)}
+                            onClick={() => setJournalToDelete(journal)}
                             className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
                           >
                             Hapus
@@ -810,6 +814,43 @@ export default function AdminJournalsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {journalToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-8 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-slate-900">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-300">
+                Konfirmasi
+              </p>
+              <h2 className="mt-2 text-2xl font-bold">
+                Hapus Jurnal?
+              </h2>
+              <p className="mt-3 break-words text-slate-600 dark:text-gray-300">
+                Data jurnal <span className="font-semibold text-slate-950 dark:text-white">{journalToDelete.nama}</span> akan dihapus permanen.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setJournalToDelete(null)}
+                disabled={deletingJournal}
+                className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteJournal}
+                disabled={deletingJournal}
+                className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-400"
+              >
+                {deletingJournal ? "Menghapus..." : "Hapus"}
+              </button>
+            </div>
           </div>
         </div>
       )}
