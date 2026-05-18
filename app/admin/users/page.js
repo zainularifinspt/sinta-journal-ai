@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import DashboardPageShell from "@/app/components/DashboardPageShell";
 import { supabase } from "@/lib/supabase";
@@ -609,26 +610,30 @@ export default function AdminUsersPage() {
       )}
 
       {userToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-8 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-slate-900">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-300">
-                Konfirmasi
-              </p>
-              <h2 className="mt-2 text-2xl font-bold">
+        <div className="fixed inset-0 z-50 flex animate-in fade-in duration-200 items-center justify-center bg-slate-950/60 px-4 py-8 backdrop-blur-md">
+          <div className="w-full max-w-md animate-in zoom-in-95 duration-200 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl dark:border-white/10 dark:bg-slate-900">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 shadow-sm dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-200">
+              <AlertTriangle className="h-8 w-8" aria-hidden="true" />
+            </div>
+
+            <div className="mt-5">
+              <h2 className="text-2xl font-bold">
                 Hapus User?
               </h2>
-              <p className="mt-3 break-words text-slate-600 dark:text-gray-300">
-                Akun <span className="font-semibold text-slate-950 dark:text-white">{userToDelete.email}</span> akan dihapus dari Auth dan profiles.
+              <p className="mt-3 break-words text-sm leading-6 text-slate-600 dark:text-gray-300">
+                Akun <span className="font-semibold text-slate-950 dark:text-white">{userToDelete.email}</span> akan dihapus dari sistem. User tidak dapat login menggunakan akun ini setelah dihapus.
+              </p>
+              <p className="mt-3 text-xs font-semibold text-slate-500 dark:text-gray-400">
+                Tindakan ini hanya dapat dilakukan oleh admin.
               </p>
             </div>
 
-            <div className="mt-6 flex flex-wrap justify-end gap-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={() => setUserToDelete(null)}
                 disabled={deletingId === userToDelete.id}
-                className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-100 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
               >
                 Batal
               </button>
@@ -636,7 +641,7 @@ export default function AdminUsersPage() {
                 type="button"
                 onClick={confirmDeleteUser}
                 disabled={deletingId === userToDelete.id}
-                className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-400"
+                className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-md disabled:cursor-not-allowed disabled:translate-y-0 disabled:bg-red-400 disabled:shadow-none"
               >
                 {deletingId === userToDelete.id ? "Menghapus..." : "Hapus User"}
               </button>
